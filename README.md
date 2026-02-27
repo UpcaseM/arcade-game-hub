@@ -1,4 +1,4 @@
-# Arcade Game Hub (HTML, CSS, JavaScript)
+# Arcade Game Hub (HTML + Phaser/TypeScript)
 
 A modern browser-based game hub built with plain HTML, CSS, and JavaScript.
 
@@ -22,16 +22,12 @@ A modern browser-based game hub built with plain HTML, CSS, and JavaScript.
 - `index.html` - app structure
 - `styles.css` - UI styling
 - `script.js` - game logic and controls
-- `alien-arena/index.html` - Alien Arena page
-- `alien-arena/styles.css` - Alien Arena UI styles
-- `alien-arena/main.js` - Alien Arena bootstrap
-- `alien-arena/js/data.js` - data-driven game config (levels/weapons/enemies/upgrades/crafting)
-- `alien-arena/js/save.js` - local save service
-- `alien-arena/js/game.js` - Alien Arena core gameplay loop and systems
+- `alien-arena-phaser/` - Alien Arena source project (Phaser 3 + TypeScript + Vite + Vitest)
+- `alien-arena/` - built static output served by GitHub Pages
 
 ## Run Locally
 
-Because this is a static app, you can run it directly:
+Hub can run as a static site:
 
 1. Open `index.html` in your browser.
 
@@ -47,9 +43,21 @@ Open:
 - Hub: `http://localhost:8000/`
 - Alien Arena direct: `http://localhost:8000/alien-arena/`
 
+Alien Arena source workflow:
+
+```bash
+cd alien-arena-phaser
+npm install
+npm run lint
+npm run test
+npm run build
+```
+
+`npm run build` outputs files to `../alien-arena` for deployment.
+
 ## Deployment Options
 
-This project has no backend and no build step, so it can be deployed to any static host.
+This project has no backend. Hub is static, and Alien Arena is prebuilt to static assets.
 
 ### Option 1: GitHub Pages
 
@@ -82,7 +90,8 @@ This project has no backend and no build step, so it can be deployed to any stat
 - Tap Blitz duration: adjust `TAP_DURATION`.
 - Color Match duration: adjust `COLOR_DURATION`.
 - Alien Arena tuning:
-  - Weapons/enemies/levels/upgrades/recipes are in `alien-arena/js/data.js`
-  - Save schema and reset behavior are in `alien-arena/js/save.js`
+  - Weapons/enemies/levels/upgrades/recipes are in `alien-arena-phaser/src/data/gameData.ts`
+  - Save schema is in `alien-arena-phaser/src/core/save.ts`
+  - Wave scheduling is in `alien-arena-phaser/src/core/waveScheduler.ts`
   - Debug keys in mission: `F2` (+XP), `F3` (+loot)
 - Colors/theme: adjust CSS variables in `styles.css`.

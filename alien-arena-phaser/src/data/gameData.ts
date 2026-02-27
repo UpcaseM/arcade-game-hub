@@ -1,6 +1,19 @@
-export const RARITY_ORDER = ["common", "uncommon", "rare", "epic", "legendary"];
+import type {
+  AttachmentDef,
+  CraftRecipe,
+  EnemyDef,
+  FinalStats,
+  LevelDef,
+  MaterialId,
+  PlayerBaseStats,
+  Rarity,
+  UpgradeDef,
+  WeaponDef
+} from "./types";
 
-export const RARITY_MULTIPLIER = {
+export const RARITY_ORDER: Rarity[] = ["common", "uncommon", "rare", "epic", "legendary"];
+
+export const RARITY_MULTIPLIER: Record<Rarity, number> = {
   common: 1,
   uncommon: 1.16,
   rare: 1.36,
@@ -8,9 +21,44 @@ export const RARITY_MULTIPLIER = {
   legendary: 1.95
 };
 
-export const SLOT_TYPES = ["muzzle", "magazine", "optic", "grip", "stock", "chip"];
+export const MATERIAL_LABELS: Record<MaterialId, string> = {
+  scrap: "Scrap",
+  alloy: "Alloy",
+  core: "Core",
+  quantum: "Quantum"
+};
 
-export const WEAPON_DEFS = [
+export const DEFAULT_OPTIONS = {
+  masterVolume: 0.6
+};
+
+export const SAVE_VERSION = 1;
+
+export const DEFAULT_PLAYER_BASE_STATS: PlayerBaseStats = {
+  maxHp: 120,
+  moveSpeed: 240,
+  critChance: 0.08,
+  critDamage: 1.6,
+  pickupRange: 110
+};
+
+export function makeEmptyFinalStats(): FinalStats {
+  return {
+    damageMul: 0,
+    fireRateMul: 0,
+    reloadTimeMul: 0,
+    critChanceAdd: 0,
+    critDamageMul: 0,
+    spreadDegAdd: 0,
+    magazineSizeAdd: 0,
+    projectileSpeedMul: 0,
+    moveSpeedMul: 0,
+    maxHpAdd: 0,
+    pickupRangeMul: 0
+  };
+}
+
+export const WEAPON_DEFS: WeaponDef[] = [
   {
     id: "pulse_rifle",
     name: "Pulse Rifle",
@@ -98,7 +146,7 @@ export const WEAPON_DEFS = [
   }
 ];
 
-export const ATTACHMENT_DEFS = [
+export const ATTACHMENT_DEFS: AttachmentDef[] = [
   {
     id: "muzzle_stabilizer",
     name: "Muzzle Stabilizer",
@@ -192,7 +240,7 @@ export const ATTACHMENT_DEFS = [
   }
 ];
 
-export const ENEMY_DEFS = [
+export const ENEMY_DEFS: EnemyDef[] = [
   {
     id: "crawler",
     name: "Crawler",
@@ -270,9 +318,9 @@ export const DROP_TABLES = {
       attachmentPool: ["chip_vamp", "chip_focus", "optic_tracker", "stock_rush", "mag_quick"]
     }
   ]
-};
+} as const;
 
-export const UPGRADE_DEFS = [
+export const UPGRADE_DEFS: UpgradeDef[] = [
   {
     id: "up_damage_1",
     name: "Photon Core",
@@ -368,7 +416,7 @@ export const UPGRADE_DEFS = [
   }
 ];
 
-export const CRAFT_RECIPES = [
+export const CRAFT_RECIPES: CraftRecipe[] = [
   {
     id: "r_scrap_to_alloy",
     name: "Refine Alloy",
@@ -421,7 +469,7 @@ export const CRAFT_RECIPES = [
   }
 ];
 
-export const LEVEL_DEFS = [
+export const LEVEL_DEFS: LevelDef[] = [
   {
     id: "alpha_outpost",
     name: "Alpha Outpost",
@@ -507,24 +555,3 @@ export const LEVEL_DEFS = [
     reward: { credits: 330 }
   }
 ];
-
-export const DEFAULT_PLAYER_BASE_STATS = {
-  maxHp: 120,
-  moveSpeed: 240,
-  critChance: 0.08,
-  critDamage: 1.6,
-  pickupRange: 110
-};
-
-export const MATERIAL_LABELS = {
-  scrap: "Scrap",
-  alloy: "Alloy",
-  core: "Core",
-  quantum: "Quantum"
-};
-
-export const DEFAULT_OPTIONS = {
-  masterVolume: 0.6
-};
-
-export const SAVE_VERSION = 1;
