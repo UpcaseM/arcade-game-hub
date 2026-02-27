@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Arcade Hub</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="hub-app">
+    <header class="hero">
+      <p class="eyebrow">OpenClaw Arcade</p>
+      <h1>Game Hub</h1>
+      <p class="hero-copy">Jump into fast mini-games with a polished, mobile-friendly experience.</p>
+    </header>
+
+    <section id="menuScreen" class="screen screen-active" aria-label="Game menu">
+      <div class="game-grid">
+        <article class="game-card snake-theme">
+          <span class="chip">Arcade Classic</span>
+          <h2>Snake Turbo</h2>
+          <p>Responsive snake with smooth timing and left/right turn controls for touch.</p>
+          <button type="button" data-open-game="snake">Play Snake</button>
+        </article>
+
+        <article class="game-card tap-theme">
+          <span class="chip">Reaction Game</span>
+          <h2>Tap Blitz</h2>
+          <p>Hit targets as quickly as possible before the timer runs out.</p>
+          <button type="button" data-open-game="tap">Play Tap Blitz</button>
+        </article>
+
+        <article class="game-card color-theme">
+          <span class="chip">Mind Twist</span>
+          <h2>Color Match</h2>
+          <p>Decide if the word and ink color match. Move fast and keep your streak.</p>
+          <button type="button" data-open-game="color">Play Color Match</button>
+        </article>
+      </div>
+    </section>
+
+    <section id="snakeScreen" class="screen" aria-label="Snake game">
+      <div class="screen-header">
+        <button type="button" class="ghost-btn back-btn" data-back-to-menu>← Back to Hub</button>
+        <h2>Snake Turbo</h2>
+        <p>Turn left or right only — use side buttons, A/D, or ←/→.</p>
+      </div>
+
+      <section class="stats" aria-label="Snake game statistics">
+        <div class="stat-card">
+          <span>Score</span>
+          <strong id="score">0</strong>
+        </div>
+        <div class="stat-card">
+          <span>High Score</span>
+          <strong id="highScore">0</strong>
+        </div>
+        <div class="stat-card">
+          <span>Speed</span>
+          <strong id="speed">1.0x</strong>
+        </div>
+      </section>
+
+      <section class="snake-shell" aria-label="Snake board and touch controls">
+        <button id="turnLeftBtn" type="button" class="turn-btn" aria-label="Turn left">↶</button>
+
+        <section class="game-panel" aria-label="Snake game board">
+          <canvas id="gameCanvas" role="img" aria-label="Snake game board"></canvas>
+          <div id="overlay" class="overlay hidden" aria-live="polite">
+            <h3 id="overlayTitle">Game Over</h3>
+            <p id="overlayText">Press Restart to play again.</p>
+          </div>
+        </section>
+
+        <button id="turnRightBtn" type="button" class="turn-btn" aria-label="Turn right">↷</button>
+      </section>
+
+      <section class="actions" aria-label="Snake game actions">
+        <button id="pauseBtn" type="button">Pause</button>
+        <button id="restartBtn" type="button" class="secondary-btn">Restart</button>
+      </section>
+    </section>
+
+    <section id="tapScreen" class="screen" aria-label="Tap Blitz game">
+      <div class="screen-header">
+        <button type="button" class="ghost-btn back-btn" data-back-to-menu>← Back to Hub</button>
+        <h2>Tap Blitz</h2>
+        <p>Tap the target quickly and stack your score before time expires.</p>
+      </div>
+
+      <section class="stats" aria-label="Tap game statistics">
+        <div class="stat-card">
+          <span>Score</span>
+          <strong id="tapScore">0</strong>
+        </div>
+        <div class="stat-card">
+          <span>Best</span>
+          <strong id="tapBest">0</strong>
+        </div>
+        <div class="stat-card">
+          <span>Time</span>
+          <strong id="tapTime">20.0s</strong>
+        </div>
+      </section>
+
+      <section id="tapArena" class="tap-arena" aria-label="Tap target arena">
+        <button id="tapTarget" type="button" class="tap-target hidden" aria-label="Tap target"></button>
+        <div id="tapOverlay" class="mini-overlay" aria-live="polite">Press Start to begin.</div>
+      </section>
+
+      <section class="actions" aria-label="Tap game actions">
+        <button id="tapStartBtn" type="button">Start</button>
+        <button id="tapResetBtn" type="button" class="secondary-btn">Reset</button>
+      </section>
+    </section>
+
+    <section id="colorScreen" class="screen" aria-label="Color Match game">
+      <div class="screen-header">
+        <button type="button" class="ghost-btn back-btn" data-back-to-menu>← Back to Hub</button>
+        <h2>Color Match</h2>
+        <p>Tap Match if the text means the same color as its ink.</p>
+      </div>
+
+      <section class="stats" aria-label="Color game statistics">
+        <div class="stat-card">
+          <span>Score</span>
+          <strong id="colorScore">0</strong>
+        </div>
+        <div class="stat-card">
+          <span>Best</span>
+          <strong id="colorBest">0</strong>
+        </div>
+        <div class="stat-card">
+          <span>Time</span>
+          <strong id="colorTime">25.0s</strong>
+        </div>
+      </section>
+
+      <section class="color-stage" aria-label="Color challenge">
+        <p class="color-prompt">Does this word match its display color?</p>
+        <h3 id="colorWord" class="color-word">Blue</h3>
+        <p id="colorFeedback" class="feedback">Press Start to begin.</p>
+      </section>
+
+      <section class="actions" aria-label="Color answer buttons">
+        <button id="matchBtn" type="button">Match</button>
+        <button id="mismatchBtn" type="button" class="secondary-btn">Mismatch</button>
+      </section>
+
+      <section class="actions" aria-label="Color game actions">
+        <button id="colorStartBtn" type="button">Start</button>
+        <button id="colorResetBtn" type="button" class="secondary-btn">Reset</button>
+      </section>
+    </section>
+  </main>
+
+  <script src="script.js" defer></script>
+</body>
+</html>
