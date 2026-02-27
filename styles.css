@@ -145,6 +145,10 @@ body {
   background: linear-gradient(145deg, rgba(42, 45, 85, 0.95), rgba(24, 30, 63, 0.92));
 }
 
+.alien-theme {
+  background: linear-gradient(145deg, rgba(20, 56, 84, 0.95), rgba(9, 27, 47, 0.92));
+}
+
 .stats {
   display: grid;
   gap: 0.65rem;

@@ -8,6 +8,12 @@ A modern browser-based game hub built with plain HTML, CSS, and JavaScript.
 - **Snake Turbo** with responsive timing and left/right turn controls
 - **Tap Blitz** reaction mini-game
 - **Color Match** rapid brain challenge
+- **Alien Arena** top-down survival shooter with:
+  - Level select + mission unlock progression
+  - Wave scheduler with multiple enemy archetypes
+  - Player leveling and 3-choice upgrades
+  - Weapon instances, attachment slots, and stat modifiers
+  - Loot drops, inventory, crafting, and local save data
 - Best-score persistence via `localStorage`
 - Responsive layout optimized for desktop and touch devices
 
@@ -16,6 +22,12 @@ A modern browser-based game hub built with plain HTML, CSS, and JavaScript.
 - `index.html` - app structure
 - `styles.css` - UI styling
 - `script.js` - game logic and controls
+- `alien-arena/index.html` - Alien Arena page
+- `alien-arena/styles.css` - Alien Arena UI styles
+- `alien-arena/main.js` - Alien Arena bootstrap
+- `alien-arena/js/data.js` - data-driven game config (levels/weapons/enemies/upgrades/crafting)
+- `alien-arena/js/save.js` - local save service
+- `alien-arena/js/game.js` - Alien Arena core gameplay loop and systems
 
 ## Run Locally
 
@@ -30,6 +42,10 @@ python3 -m http.server 8000
 ```
 
 Then visit `http://localhost:8000`.
+
+Open:
+- Hub: `http://localhost:8000/`
+- Alien Arena direct: `http://localhost:8000/alien-arena/`
 
 ## Deployment Options
 
@@ -65,4 +81,8 @@ This project has no backend and no build step, so it can be deployed to any stat
 - Snake speed: tweak `INITIAL_MOVE_DELAY`, `MIN_MOVE_DELAY`, and `SPEED_STEP`.
 - Tap Blitz duration: adjust `TAP_DURATION`.
 - Color Match duration: adjust `COLOR_DURATION`.
+- Alien Arena tuning:
+  - Weapons/enemies/levels/upgrades/recipes are in `alien-arena/js/data.js`
+  - Save schema and reset behavior are in `alien-arena/js/save.js`
+  - Debug keys in mission: `F2` (+XP), `F3` (+loot)
 - Colors/theme: adjust CSS variables in `styles.css`.

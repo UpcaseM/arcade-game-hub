@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Alien Arena - Top Down Survival</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <main class="app" id="alienArenaApp">
+    <header class="top-header">
+      <div>
+        <p class="eyebrow">Alien Planet Operations</p>
+        <h1>Alien Arena</h1>
+      </div>
+      <div class="header-actions">
+        <button id="clearSaveBtn" class="ghost-btn" type="button">Clear Save</button>
+        <a class="ghost-link" href="../index.html">Back to Hub</a>
+      </div>
+    </header>
+
+    <section id="screenMainMenu" class="screen screen-active">
+      <article class="panel">
+        <h2>Mission Briefing</h2>
+        <p>
+          Survive incoming alien waves, collect loot, build your weapon, and unlock deeper sectors.
+          Movement: WASD / arrows, Aim: Mouse, Fire: Hold left click.
+        </p>
+        <div class="menu-actions">
+          <button id="btnContinue" type="button">Continue Last Loadout</button>
+          <button id="btnLevelSelect" type="button">Select Mission</button>
+        </div>
+      </article>
+
+      <article class="panel summary-panel">
+        <h3>Meta Progress</h3>
+        <p id="metaSummary">No stats yet.</p>
+        <ul id="resourceSummary"></ul>
+      </article>
+    </section>
+
+    <section id="screenLevelSelect" class="screen">
+      <div class="panel">
+        <h2>Level Select</h2>
+        <p>Finish missions to unlock the next one.</p>
+        <div id="levelCards" class="level-grid"></div>
+        <div class="menu-actions">
+          <button id="btnBackMain" class="secondary" type="button">Back</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="screenGame" class="screen">
+      <div class="hud-row">
+        <div class="hud-card">
+          <span>HP</span>
+          <div class="bar"><i id="hpBarFill"></i></div>
+          <b id="hpText">120 / 120</b>
+        </div>
+        <div class="hud-card">
+          <span>XP</span>
+          <div class="bar xp"><i id="xpBarFill"></i></div>
+          <b id="xpText">0 / 40</b>
+        </div>
+        <div class="hud-card compact">
+          <span>Level</span>
+          <b id="playerLevelText">1</b>
+        </div>
+        <div class="hud-card compact">
+          <span>Kills</span>
+          <b id="killsText">0</b>
+        </div>
+        <div class="hud-card compact">
+          <span>Time</span>
+          <b id="timerText">00:00</b>
+        </div>
+      </div>
+
+      <div class="game-layout">
+        <div class="canvas-shell">
+          <canvas id="gameCanvas" width="1280" height="720" aria-label="Alien Arena battlefield"></canvas>
+          <div id="hitFlash" class="hit-flash"></div>
+        </div>
+
+        <aside class="side-hud">
+          <div class="side-card">
+            <h3>Weapon</h3>
+            <p id="weaponNameText">Pulse Rifle</p>
+            <p id="weaponStatsText">DMG 18 | Rate 5.6 | Mag 28</p>
+            <p id="ammoText">Ammo 28/28</p>
+            <p id="reloadText">Ready</p>
+          </div>
+
+          <div class="side-card">
+            <h3>Mission</h3>
+            <p id="missionText">Alpha Outpost</p>
+            <p id="objectiveText">Kills 0 / 60</p>
+            <p id="creditsText">Credits 0</p>
+          </div>
+
+          <div class="side-card">
+            <h3>Controls</h3>
+            <p>I: Inventory</p>
+            <p>C: Crafting</p>
+            <p>ESC: Pause</p>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <section id="inventoryPanel" class="floating-panel hidden" aria-label="Inventory panel">
+      <div class="floating-head">
+        <h3>Inventory</h3>
+        <button id="closeInventoryBtn" class="secondary" type="button">Close</button>
+      </div>
+      <div class="floating-body">
+        <p id="inventoryCredits">Credits: 0</p>
+        <p id="materialSummary">Materials: -</p>
+        <div class="list-wrap">
+          <h4>Weapons</h4>
+          <ul id="weaponList"></ul>
+        </div>
+        <div class="list-wrap">
+          <h4>Attachments</h4>
+          <ul id="attachmentList"></ul>
+        </div>
+      </div>
+    </section>
+
+    <section id="craftPanel" class="floating-panel hidden" aria-label="Crafting panel">
+      <div class="floating-head">
+        <h3>Crafting</h3>
+        <button id="closeCraftBtn" class="secondary" type="button">Close</button>
+      </div>
+      <div class="floating-body">
+        <p>Combine materials and duplicates to power up.</p>
+        <ul id="craftRecipeList"></ul>
+      </div>
+    </section>
+
+    <section id="pauseOverlay" class="overlay hidden">
+      <div class="overlay-card">
+        <h2>Paused</h2>
+        <label class="volume-row" for="volumeInput">
+          Volume
+          <input id="volumeInput" type="range" min="0" max="1" step="0.05" value="0.6">
+        </label>
+        <div class="menu-actions">
+          <button id="btnResume" type="button">Resume</button>
+          <button id="btnExitToLevels" class="secondary" type="button">Exit to Levels</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="upgradeOverlay" class="overlay hidden">
+      <div class="overlay-card large">
+        <h2>Choose Upgrade</h2>
+        <p>Pick one to continue.</p>
+        <div id="upgradeCards" class="upgrade-grid"></div>
+      </div>
+    </section>
+
+    <section id="resultOverlay" class="overlay hidden">
+      <div class="overlay-card">
+        <h2 id="resultTitle">Mission Complete</h2>
+        <p id="resultSummary">Summary text</p>
+        <div class="menu-actions">
+          <button id="btnNextMission" type="button">Next Mission</button>
+          <button id="btnResultLevels" class="secondary" type="button">Back to Levels</button>
+        </div>
+      </div>
+    </section>
+
+    <div id="toastRack" class="toast-rack"></div>
+  </main>
+
+  <script type="module" src="./main.js"></script>
+</body>
+</html>
