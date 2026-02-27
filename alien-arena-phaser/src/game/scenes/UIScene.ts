@@ -1,8 +1,10 @@
 import Phaser from "phaser";
 import {
   EVENT_COMMAND_PAUSE_EXIT,
+  EVENT_COMMAND_PAUSE_MAIN_MENU,
   EVENT_COMMAND_PAUSE_RESUME,
   EVENT_COMMAND_RESULT_LEVELS,
+  EVENT_COMMAND_RESULT_MAIN_MENU,
   EVENT_COMMAND_RESULT_NEXT,
   EVENT_COMMAND_UPGRADE_PICK,
   EVENT_HIDE_RESULT,
@@ -139,7 +141,7 @@ export class UIScene extends Phaser.Scene {
 
   private createPauseOverlay(): void {
     const dim = this.add.rectangle(this.scale.width * 0.5, this.scale.height * 0.5, this.scale.width, this.scale.height, 0x01050f, 0.66);
-    const panel = this.add.rectangle(this.scale.width * 0.5, this.scale.height * 0.5, 460, 280, 0x0f1f43, 0.96)
+    const panel = this.add.rectangle(this.scale.width * 0.5, this.scale.height * 0.5, 460, 340, 0x0f1f43, 0.96)
       .setStrokeStyle(1, 0x8db8ff, 0.8);
 
     const title = this.add.text(this.scale.width * 0.5, this.scale.height * 0.5 - 92, "Paused", {
@@ -154,15 +156,19 @@ export class UIScene extends Phaser.Scene {
       color: "#b6c9ec"
     }).setOrigin(0.5);
 
-    const resume = makeButton(this, this.scale.width * 0.5, this.scale.height * 0.5 + 28, 220, 44, "Resume", () => {
+    const resume = makeButton(this, this.scale.width * 0.5, this.scale.height * 0.5 + 6, 220, 44, "Resume", () => {
       this.game.events.emit(EVENT_COMMAND_PAUSE_RESUME);
     });
 
-    const exit = makeButton(this, this.scale.width * 0.5, this.scale.height * 0.5 + 86, 220, 44, "Back to Levels", () => {
+    const exit = makeButton(this, this.scale.width * 0.5, this.scale.height * 0.5 + 62, 220, 44, "Back to Levels", () => {
       this.game.events.emit(EVENT_COMMAND_PAUSE_EXIT);
     }, true);
 
-    this.pauseOverlay = this.add.container(0, 0, [dim, panel, title, desc, resume, exit]);
+    const menu = makeButton(this, this.scale.width * 0.5, this.scale.height * 0.5 + 118, 220, 44, "Main Menu", () => {
+      this.game.events.emit(EVENT_COMMAND_PAUSE_MAIN_MENU);
+    }, true);
+
+    this.pauseOverlay = this.add.container(0, 0, [dim, panel, title, desc, resume, exit, menu]);
     this.pauseOverlay.setVisible(false);
   }
 
@@ -184,7 +190,7 @@ export class UIScene extends Phaser.Scene {
 
   private createResultOverlay(): void {
     const dim = this.add.rectangle(this.scale.width * 0.5, this.scale.height * 0.5, this.scale.width, this.scale.height, 0x01050f, 0.72);
-    const panel = this.add.rectangle(this.scale.width * 0.5, this.scale.height * 0.5, 680, 350, 0x0e1f3f, 0.98)
+    const panel = this.add.rectangle(this.scale.width * 0.5, this.scale.height * 0.5, 680, 420, 0x0e1f3f, 0.98)
       .setStrokeStyle(1, 0x8cb8ff, 0.8);
 
     this.resultTitle = this.add.text(this.scale.width * 0.5, this.scale.height * 0.5 - 110, "Mission Complete", {
@@ -209,7 +215,11 @@ export class UIScene extends Phaser.Scene {
       this.game.events.emit(EVENT_COMMAND_RESULT_LEVELS);
     }, true);
 
-    this.resultOverlay = this.add.container(0, 0, [dim, panel, this.resultTitle, this.resultSummary, this.resultNextBtn, toLevels]);
+    const toMenu = makeButton(this, this.scale.width * 0.5, this.scale.height * 0.5 + 184, 240, 46, "Main Menu", () => {
+      this.game.events.emit(EVENT_COMMAND_RESULT_MAIN_MENU);
+    }, true);
+
+    this.resultOverlay = this.add.container(0, 0, [dim, panel, this.resultTitle, this.resultSummary, this.resultNextBtn, toLevels, toMenu]);
     this.resultOverlay.setVisible(false);
   }
 

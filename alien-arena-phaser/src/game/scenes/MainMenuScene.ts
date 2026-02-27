@@ -2,6 +2,11 @@ import Phaser from "phaser";
 import { gameState } from "../../core/state";
 import { LEVEL_DEFS, MATERIAL_LABELS } from "../../data/gameData";
 
+function returnToHub(): void {
+  const target = new URL("../", window.location.href);
+  window.location.assign(target.toString());
+}
+
 function makeButton(scene: Phaser.Scene, x: number, y: number, text: string, onClick: () => void): Phaser.GameObjects.Container {
   const bg = scene.add.rectangle(0, 0, 260, 42, 0x2a4d9e, 0.9).setStrokeStyle(1, 0x8bb8ff, 0.8);
   const label = scene.add.text(0, 0, text, {
@@ -45,11 +50,14 @@ export class MainMenuScene extends Phaser.Scene {
       const target = unlocked[unlocked.length - 1] || LEVEL_DEFS[0];
       gameState.selectedLevelId = target.id;
       this.scene.start("GameScene");
-      this.scene.launch("UIScene");
     });
 
     makeButton(this, width * 0.5, height * 0.62, "Level Select", () => {
       this.scene.start("LevelSelectScene");
+    });
+
+    makeButton(this, width * 0.5, height * 0.72, "Back to Game Hub", () => {
+      returnToHub();
     });
 
     const save = gameState.saveData;

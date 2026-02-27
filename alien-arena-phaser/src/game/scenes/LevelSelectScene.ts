@@ -57,7 +57,6 @@ export class LevelSelectScene extends Phaser.Scene {
         bg.on("pointerdown", () => {
           gameState.selectedLevelId = level.id;
           this.scene.start("GameScene");
-          this.scene.launch("UIScene");
         });
       }
     }

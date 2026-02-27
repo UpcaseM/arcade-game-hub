@@ -27,8 +27,10 @@ import {
   EVENT_COMMAND_EQUIP_ATTACHMENT,
   EVENT_COMMAND_EQUIP_WEAPON,
   EVENT_COMMAND_PAUSE_EXIT,
+  EVENT_COMMAND_PAUSE_MAIN_MENU,
   EVENT_COMMAND_PAUSE_RESUME,
   EVENT_COMMAND_RESULT_LEVELS,
+  EVENT_COMMAND_RESULT_MAIN_MENU,
   EVENT_COMMAND_RESULT_NEXT,
   EVENT_COMMAND_UPGRADE_PICK,
   EVENT_CRAFT_REFRESH,
@@ -209,6 +211,7 @@ export class GameScene extends Phaser.Scene {
     this.audio.setVolume(gameState.saveData.options.masterVolume);
 
     this.bindCommands();
+    this.ensureUiSceneActive();
 
     this.setupDone = true;
     this.refreshHud();
@@ -272,9 +275,9 @@ export class GameScene extends Phaser.Scene {
     this.player = this.physics.add.image(x, y, "tex_player");
     this.player.setDepth(6);
     this.player.setCollideWorldBounds(true);
-    this.player.setDamping(true);
-    this.player.setDrag(0.87);
-    this.player.setMaxVelocity(460, 460);
+    this.player.setDamping(false);
+    this.player.setDrag(1200, 1200);
+    this.player.setMaxVelocity(320, 320);
 
     this.cameras.main.startFollow(this.player, true, 0.11, 0.11);
   }
@@ -322,6 +325,7 @@ export class GameScene extends Phaser.Scene {
     events.on(EVENT_COMMAND_UPGRADE_PICK, this.onUpgradePick, this);
     events.on(EVENT_COMMAND_PAUSE_RESUME, this.onPauseResume, this);
     events.on(EVENT_COMMAND_PAUSE_EXIT, this.onPauseExit, this);
+    events.on(EVENT_COMMAND_PAUSE_MAIN_MENU, this.onPauseMainMenu, this);
 
     events.on(EVENT_COMMAND_EQUIP_WEAPON, this.onEquipWeapon, this);
     events.on(EVENT_COMMAND_EQUIP_ATTACHMENT, this.onEquipAttachment, this);
@@ -332,11 +336,13 @@ export class GameScene extends Phaser.Scene {
 
     events.on(EVENT_COMMAND_RESULT_NEXT, this.onResultNext, this);
     events.on(EVENT_COMMAND_RESULT_LEVELS, this.onResultLevels, this);
+    events.on(EVENT_COMMAND_RESULT_MAIN_MENU, this.onResultMainMenu, this);
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       events.off(EVENT_COMMAND_UPGRADE_PICK, this.onUpgradePick, this);
       events.off(EVENT_COMMAND_PAUSE_RESUME, this.onPauseResume, this);
       events.off(EVENT_COMMAND_PAUSE_EXIT, this.onPauseExit, this);
+      events.off(EVENT_COMMAND_PAUSE_MAIN_MENU, this.onPauseMainMenu, this);
 
       events.off(EVENT_COMMAND_EQUIP_WEAPON, this.onEquipWeapon, this);
       events.off(EVENT_COMMAND_EQUIP_ATTACHMENT, this.onEquipAttachment, this);
@@ -347,6 +353,7 @@ export class GameScene extends Phaser.Scene {
 
       events.off(EVENT_COMMAND_RESULT_NEXT, this.onResultNext, this);
       events.off(EVENT_COMMAND_RESULT_LEVELS, this.onResultLevels, this);
+      events.off(EVENT_COMMAND_RESULT_MAIN_MENU, this.onResultMainMenu, this);
     });
   }
 
@@ -444,6 +451,11 @@ export class GameScene extends Phaser.Scene {
     this.pauseReason = reason;
     this.game.events.emit(EVENT_PAUSE_SET, reason === "pause");
 
+    if (reason) {
+      this.player.setAcceleration(0, 0);
+      this.player.setVelocity(0, 0);
+    }
+
     if (reason !== "inventory") {
       this.emitInventory(false);
     }
@@ -534,12 +546,20 @@ export class GameScene extends Phaser.Scene {
       moveY /= len;
     }
 
-    const targetVx = moveX * this.playerMoveSpeed;
-    const targetVy = moveY * this.playerMoveSpeed;
+    const body = this.player.body as Phaser.Physics.Arcade.Body;
+    const accel = this.playerMoveSpeed * 8;
 
-    const velocity = this.player.body!.velocity;
-    velocity.x = Phaser.Math.Linear(velocity.x, targetVx, 1 - Math.exp(-deltaSec * 11));
-    velocity.y = Phaser.Math.Linear(velocity.y, targetVy, 1 - Math.exp(-deltaSec * 11));
+    if (len > 0.001) {
+      body.setAcceleration(moveX * accel, moveY * accel);
+    } else {
+      body.setAcceleration(0, 0);
+
+      if (body.speed < 10) {
+        body.setVelocity(0, 0);
+      }
+    }
+
+    body.setMaxVelocity(this.playerMoveSpeed, this.playerMoveSpeed);
 
     const pointer = this.input.activePointer;
     const worldPoint = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
@@ -936,6 +956,7 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
+    this.pickupMeta.delete(pickup);
     this.disableBodyObject(pickup);
 
     if (meta.type === "xp") {
@@ -943,6 +964,8 @@ export class GameScene extends Phaser.Scene {
       this.audio.pickup();
       return;
     }
+
+    let loadoutChanged = false;
 
     if (meta.type === "credits") {
       gameState.saveData.credits += meta.amount;
@@ -953,17 +976,34 @@ export class GameScene extends Phaser.Scene {
       this.runMaterialsEarned[meta.materialId] += meta.qty;
       this.game.events.emit(EVENT_TOAST, `+${meta.qty} ${MATERIAL_LABELS[meta.materialId]}`);
     } else if (meta.type === "weapon") {
-      addWeapon(gameState.saveData.inventory, meta.weaponId, meta.level, meta.rarity);
-      this.game.events.emit(EVENT_TOAST, `Weapon found: ${weaponById[meta.weaponId].name}`);
+      const weaponDef = weaponById[meta.weaponId];
+
+      if (weaponDef) {
+        addWeapon(gameState.saveData.inventory, meta.weaponId, meta.level, meta.rarity);
+        loadoutChanged = true;
+        this.game.events.emit(EVENT_TOAST, `Weapon found: ${weaponDef.name}`);
+      } else {
+        this.game.events.emit(EVENT_TOAST, `Skipped unknown weapon drop (${meta.weaponId}).`);
+      }
     } else if (meta.type === "attachment") {
-      addAttachment(gameState.saveData.inventory, meta.attachmentId);
-      this.game.events.emit(EVENT_TOAST, `Attachment found: ${attachmentById[meta.attachmentId].name}`);
+      const attachmentDef = attachmentById[meta.attachmentId];
+
+      if (attachmentDef) {
+        addAttachment(gameState.saveData.inventory, meta.attachmentId);
+        loadoutChanged = true;
+        this.game.events.emit(EVENT_TOAST, `Attachment found: ${attachmentDef.name}`);
+      } else {
+        this.game.events.emit(EVENT_TOAST, `Skipped unknown attachment drop (${meta.attachmentId}).`);
+      }
     }
 
     syncAttachmentOwnership(gameState.saveData.inventory);
     gameState.persistSave();
-    this.syncLoadout();
-    this.refreshDerivedStats();
+
+    if (loadoutChanged) {
+      this.syncLoadout();
+      this.refreshDerivedStats();
+    }
 
     this.emitInventory(this.pauseReason === "inventory");
     this.emitCraft(this.pauseReason === "craft");
@@ -990,6 +1030,12 @@ export class GameScene extends Phaser.Scene {
 
     this.queuedLevelUps -= 1;
     const choices = choiceWeighted(UPGRADE_DEFS, 3);
+
+    if (choices.length === 0) {
+      return;
+    }
+
+    this.ensureUiSceneActive();
     this.setPause("upgrade");
     this.game.events.emit(
       EVENT_SHOW_UPGRADE,
@@ -1122,6 +1168,22 @@ export class GameScene extends Phaser.Scene {
 
     this.playerHp = clamp(this.playerHp, 0, this.playerMaxHp);
     this.weaponAmmo = clamp(this.weaponAmmo, 0, this.weaponStats.magazineSize);
+
+    if (this.player?.body) {
+      this.player.setMaxVelocity(this.playerMoveSpeed, this.playerMoveSpeed);
+    }
+  }
+
+  private ensureUiSceneActive(): void {
+    if (this.scene.isSleeping("UIScene")) {
+      this.scene.wake("UIScene");
+    }
+
+    if (!this.scene.isActive("UIScene")) {
+      this.scene.launch("UIScene");
+    }
+
+    this.scene.bringToTop("UIScene");
   }
 
   private emitInventory(visible: boolean): void {
@@ -1244,6 +1306,10 @@ export class GameScene extends Phaser.Scene {
 
   private onPauseExit = (): void => {
     this.exitToLevels();
+  };
+
+  private onPauseMainMenu = (): void => {
+    this.exitToMainMenu();
   };
 
   private onEquipWeapon = (instanceId: string): void => {
@@ -1382,6 +1448,10 @@ export class GameScene extends Phaser.Scene {
     this.exitToLevels();
   };
 
+  private onResultMainMenu = (): void => {
+    this.exitToMainMenu();
+  };
+
   private exitToLevels(): void {
     this.game.events.emit(EVENT_HIDE_RESULT);
     this.game.events.emit(EVENT_HIDE_UPGRADE);
@@ -1390,5 +1460,15 @@ export class GameScene extends Phaser.Scene {
     this.emitCraft(false);
     this.scene.stop("UIScene");
     this.scene.start("LevelSelectScene");
+  }
+
+  private exitToMainMenu(): void {
+    this.game.events.emit(EVENT_HIDE_RESULT);
+    this.game.events.emit(EVENT_HIDE_UPGRADE);
+    this.game.events.emit(EVENT_PAUSE_SET, false);
+    this.emitInventory(false);
+    this.emitCraft(false);
+    this.scene.stop("UIScene");
+    this.scene.start("MainMenuScene");
   }
 }
