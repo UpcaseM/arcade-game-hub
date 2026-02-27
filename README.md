@@ -93,5 +93,61 @@ This project has no backend. Hub is static, and Alien Arena is prebuilt to stati
   - Weapons/enemies/levels/upgrades/recipes are in `alien-arena-phaser/src/data/gameData.ts`
   - Save schema is in `alien-arena-phaser/src/core/save.ts`
   - Wave scheduling is in `alien-arena-phaser/src/core/waveScheduler.ts`
-  - Debug keys in mission: `F2` (+XP), `F3` (+loot)
-- Colors/theme: adjust CSS variables in `styles.css`.
+  - Debug keys in mission: `F2` (+XP), `F3` (+loot), `F4` (spawn stress drops), `F5` (forced collect burst), `F6` (toggle auto-move), `F7` (unstick), `F8` (QA snapshot)
+  - Colors/theme: adjust CSS variables in `styles.css`.
+
+## Alien Arena Weapon Balance Snapshot (2026-02)
+
+Target is role separation instead of one dominant gun:
+
+| Weapon | Role | Base profile (before rarity/level) |
+| --- | --- | --- |
+| Pulse Rifle | Stable starter | DMG 18, Rate 5.6, Mag 28 |
+| Nova SMG | Close-mid spray | DMG 11, Rate 9.4, Mag 38 |
+| Arc Shotgun | Burst + knockback | DMG 13 x 6 pellets, Rate 1.85 |
+| Rail Lancer | Long range pierce | DMG 58, Rate 1.2, built-in pierce |
+| Plasma Carbine | Mid-range AoE pressure | DMG 22, Rate 6.8, built-in splash |
+| Tempest Minigun | Sustained DPS ramp | DMG 7, Rate 15.8, Mag 96, overdrive bias |
+| Seeker Launcher | Guided explosive hits | DMG 32, Rate 1.9, built-in homing + splash |
+| Quantum Splitter | Multi-projectile control | DMG 11 x 4 pellets, Rate 4.3, split behavior |
+| Sunlance Cannon | Heavy burst + beam line | DMG 88, Rate 0.72, Mag 4, beam follow-up |
+| Void Blaster | Chain-control hybrid | DMG 34, Rate 4.7, chain/homing bias |
+
+Special upgrades now stack by pickup count:
+- `up_pierce_rounds`
+- `up_warhead`
+- `up_arc_chain`
+- `up_guidance`
+- `up_overdrive`
+
+## Alien Arena Local QA Flow
+
+Use this before deploying:
+
+1. Start local server from project root:
+```bash
+python3 -m http.server 8000
+```
+2. Open `http://localhost:8000/alien-arena/?qa=1` (or `?qa=1&qaAuto=1` for auto-drive mode).
+3. Enter a mission and watch the bottom-left QA overlay:
+  - `pause=none` during normal play.
+  - `speed` should be non-zero while movement keys are held.
+  - `STALL?` should not stay on-screen while trying to move in open space.
+4. Press `F4` 2-3 times, then run through drops.
+5. If movement stalls:
+  - Press `F8` to dump a snapshot to browser Console (`[AlienArena QA] snapshot`).
+  - Press `F7` to run one-shot unstick logic.
+  - Toggle `F6` auto-move to check if movement logic still works without keyboard input.
+6. Verify movement stays responsive when many pickups are collected.
+7. Verify `Main Menu` and `Back to Game Hub` buttons work.
+
+Console QA API:
+
+```js
+window.__alienArenaQa.snapshot()
+window.__alienArenaQa.spawnDrops(120)
+window.__alienArenaQa.forceCollect()
+window.__alienArenaQa.autoMove(true)
+window.__alienArenaQa.unstick()
+window.__alienArenaQa.events()
+```

@@ -131,6 +131,63 @@ export const WEAPON_DEFS: WeaponDef[] = [
     attachmentSlots: ["muzzle", "magazine", "optic", "chip"]
   },
   {
+    id: "tempest_minigun",
+    name: "Tempest Minigun",
+    rarity: "epic",
+    baseLevel: 1,
+    damage: 7,
+    fireRate: 15.8,
+    projectileSpeed: 650,
+    spreadDeg: 8.2,
+    magazineSize: 96,
+    reloadTimeMs: 2050,
+    rangePx: 720,
+    attachmentSlots: ["muzzle", "magazine", "grip", "stock"]
+  },
+  {
+    id: "seeker_launcher",
+    name: "Seeker Launcher",
+    rarity: "rare",
+    baseLevel: 1,
+    damage: 32,
+    fireRate: 1.9,
+    projectileSpeed: 520,
+    spreadDeg: 4.8,
+    magazineSize: 7,
+    reloadTimeMs: 2050,
+    rangePx: 840,
+    attachmentSlots: ["muzzle", "optic", "chip"]
+  },
+  {
+    id: "quantum_splitter",
+    name: "Quantum Splitter",
+    rarity: "epic",
+    baseLevel: 1,
+    damage: 11,
+    fireRate: 4.3,
+    projectileSpeed: 710,
+    spreadDeg: 10.8,
+    magazineSize: 24,
+    reloadTimeMs: 1580,
+    rangePx: 740,
+    pellets: 4,
+    attachmentSlots: ["muzzle", "magazine", "optic", "chip"]
+  },
+  {
+    id: "sunlance_cannon",
+    name: "Sunlance Cannon",
+    rarity: "legendary",
+    baseLevel: 1,
+    damage: 88,
+    fireRate: 0.72,
+    projectileSpeed: 1050,
+    spreadDeg: 1.6,
+    magazineSize: 4,
+    reloadTimeMs: 2350,
+    rangePx: 1180,
+    attachmentSlots: ["optic", "stock", "chip"]
+  },
+  {
     id: "void_blaster",
     name: "Void Blaster",
     rarity: "legendary",
@@ -291,7 +348,7 @@ export const DROP_TABLES = {
     { type: "credits", weight: 35, min: 5, max: 16 },
     { type: "material", materialId: "scrap", weight: 30, min: 1, max: 3 },
     { type: "xp", weight: 100, min: 1, max: 1 },
-    { type: "weapon", weight: 9, weaponPool: ["pulse_rifle", "nova_smg"] },
+    { type: "weapon", weight: 10, weaponPool: ["pulse_rifle", "nova_smg", "seeker_launcher"] },
     { type: "attachment", weight: 8, attachmentPool: ["muzzle_stabilizer", "mag_extended", "grip_recoil"] }
   ],
   advanced: [
@@ -299,7 +356,7 @@ export const DROP_TABLES = {
     { type: "material", materialId: "scrap", weight: 22, min: 2, max: 5 },
     { type: "material", materialId: "alloy", weight: 14, min: 1, max: 2 },
     { type: "xp", weight: 100, min: 1, max: 2 },
-    { type: "weapon", weight: 12, weaponPool: ["plasma_carbine", "rail_lancer", "arc_shotgun"] },
+    { type: "weapon", weight: 14, weaponPool: ["plasma_carbine", "rail_lancer", "arc_shotgun", "tempest_minigun", "quantum_splitter"] },
     {
       type: "attachment",
       weight: 12,
@@ -311,7 +368,7 @@ export const DROP_TABLES = {
     { type: "material", materialId: "alloy", weight: 28, min: 1, max: 3 },
     { type: "material", materialId: "core", weight: 16, min: 1, max: 2 },
     { type: "xp", weight: 100, min: 2, max: 3 },
-    { type: "weapon", weight: 16, weaponPool: ["void_blaster", "plasma_carbine", "rail_lancer"] },
+    { type: "weapon", weight: 19, weaponPool: ["void_blaster", "plasma_carbine", "rail_lancer", "sunlance_cannon", "quantum_splitter"] },
     {
       type: "attachment",
       weight: 18,
@@ -413,6 +470,74 @@ export const UPGRADE_DEFS: UpgradeDef[] = [
     modifiers: [],
     onKillHealEvery: 6,
     onKillHealAmount: 2
+  },
+  {
+    id: "up_pierce_rounds",
+    name: "Pierce Rounds",
+    description: "Shots pierce +1 enemy (stacking)",
+    weight: 7,
+    modifiers: []
+  },
+  {
+    id: "up_warhead",
+    name: "Micro Warhead",
+    description: "Shots gain blast radius and splash damage (stacking)",
+    weight: 7,
+    modifiers: []
+  },
+  {
+    id: "up_arc_chain",
+    name: "Arc Chain",
+    description: "Crit hits may chain to nearby enemies (stacking)",
+    weight: 6,
+    modifiers: []
+  },
+  {
+    id: "up_guidance",
+    name: "Guidance Core",
+    description: "Projectiles gain homing and turn speed (stacking)",
+    weight: 8,
+    modifiers: []
+  },
+  {
+    id: "up_overdrive",
+    name: "Combat Overdrive",
+    description: "Sustained fire ramps attack speed harder (stacking)",
+    weight: 7,
+    modifiers: []
+  },
+  {
+    id: "up_phase_barrier",
+    name: "Phase Barrier",
+    description: "Max HP +18, pickup range +15%, heal 10",
+    weight: 6,
+    modifiers: [
+      { stat: "maxHpAdd", value: 18 },
+      { stat: "pickupRangeMul", value: 0.15 }
+    ],
+    healFlat: 10
+  },
+  {
+    id: "up_close_quarters",
+    name: "Close Quarters Matrix",
+    description: "Damage +10%, spread +1.2, move speed +8%",
+    weight: 6,
+    modifiers: [
+      { stat: "damageMul", value: 0.1 },
+      { stat: "spreadDegAdd", value: 1.2 },
+      { stat: "moveSpeedMul", value: 0.08 }
+    ]
+  },
+  {
+    id: "up_overcharge_core",
+    name: "Overcharge Core",
+    description: "Damage +8%, projectile speed +15%, crit chance +3%",
+    weight: 5,
+    modifiers: [
+      { stat: "damageMul", value: 0.08 },
+      { stat: "projectileSpeedMul", value: 0.15 },
+      { stat: "critChanceAdd", value: 0.03 }
+    ]
   }
 ];
 

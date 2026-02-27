@@ -1,5 +1,7 @@
 import Phaser from "phaser";
 
+const ASSET_ROOT = "assets/game/kenney";
+
 function generateCircleTexture(scene: Phaser.Scene, key: string, radius: number, color: number): void {
   const g = scene.add.graphics();
   g.fillStyle(color, 1);
@@ -21,21 +23,104 @@ export class PreloadScene extends Phaser.Scene {
     super("PreloadScene");
   }
 
+  preload(): void {
+    this.load.image("bg_starfield", `${ASSET_ROOT}/background/bg_blue.png`);
+
+    this.load.image("tex_player", `${ASSET_ROOT}/ships/player_main.png`);
+    this.load.image("tex_bullet", `${ASSET_ROOT}/bullets/bullet_player.png`);
+    this.load.image("tex_enemy_bullet", `${ASSET_ROOT}/bullets/bullet_enemy.png`);
+
+    this.load.image("tex_enemy_crawler", `${ASSET_ROOT}/enemies/enemy_crawler.png`);
+    this.load.image("tex_enemy_spitter", `${ASSET_ROOT}/enemies/enemy_spitter.png`);
+    this.load.image("tex_enemy_swarmling", `${ASSET_ROOT}/enemies/enemy_swarmling.png`);
+    this.load.image("tex_enemy_crusher", `${ASSET_ROOT}/enemies/enemy_crusher.png`);
+
+    this.load.image("tex_pickup_xp", `${ASSET_ROOT}/pickups/pickup_xp.png`);
+    this.load.image("tex_pickup_credits", `${ASSET_ROOT}/pickups/pickup_credits.png`);
+    this.load.image("tex_pickup_material", `${ASSET_ROOT}/pickups/pickup_material.png`);
+    this.load.image("tex_pickup_weapon", `${ASSET_ROOT}/pickups/pickup_weapon.png`);
+    this.load.image("tex_pickup_attachment", `${ASSET_ROOT}/pickups/pickup_attachment.png`);
+
+    this.load.image("fx_muzzle", `${ASSET_ROOT}/effects/muzzle_fire.png`);
+    this.load.image("fx_hit", `${ASSET_ROOT}/effects/hit_spark.png`);
+    this.load.image("fx_levelup", `${ASSET_ROOT}/effects/levelup_shield.png`);
+    this.load.image("fx_explosion_a", `${ASSET_ROOT}/effects/explosion_a.png`);
+    this.load.image("fx_explosion_b", `${ASSET_ROOT}/effects/explosion_b.png`);
+    this.load.image("fx_explosion_c", `${ASSET_ROOT}/effects/explosion_c.png`);
+  }
+
   create(): void {
-    generateArrowTexture(this, "tex_player", 0x6ff4df);
-    generateCircleTexture(this, "tex_bullet", 4, 0x79edff);
-    generateCircleTexture(this, "tex_enemy_bullet", 5, 0xff9a5d);
+    if (!this.textures.exists("tex_player")) {
+      generateArrowTexture(this, "tex_player", 0x6ff4df);
+    }
 
-    generateCircleTexture(this, "tex_enemy_crawler", 18, 0xff6b80);
-    generateCircleTexture(this, "tex_enemy_spitter", 18, 0xd784ff);
-    generateCircleTexture(this, "tex_enemy_swarmling", 13, 0x7cfa67);
-    generateCircleTexture(this, "tex_enemy_crusher", 23, 0xe8a95a);
+    if (!this.textures.exists("tex_bullet")) {
+      generateCircleTexture(this, "tex_bullet", 4, 0x79edff);
+    }
 
-    generateCircleTexture(this, "tex_pickup_xp", 6, 0x5ad8ff);
-    generateCircleTexture(this, "tex_pickup_credits", 8, 0xffd569);
-    generateCircleTexture(this, "tex_pickup_material", 8, 0x8fff8c);
-    generateCircleTexture(this, "tex_pickup_weapon", 9, 0xffa7ff);
-    generateCircleTexture(this, "tex_pickup_attachment", 9, 0xbfb8ff);
+    if (!this.textures.exists("tex_enemy_bullet")) {
+      generateCircleTexture(this, "tex_enemy_bullet", 5, 0xff9a5d);
+    }
+
+    if (!this.textures.exists("tex_enemy_crawler")) {
+      generateCircleTexture(this, "tex_enemy_crawler", 18, 0xff6b80);
+    }
+
+    if (!this.textures.exists("tex_enemy_spitter")) {
+      generateCircleTexture(this, "tex_enemy_spitter", 18, 0xd784ff);
+    }
+
+    if (!this.textures.exists("tex_enemy_swarmling")) {
+      generateCircleTexture(this, "tex_enemy_swarmling", 13, 0x7cfa67);
+    }
+
+    if (!this.textures.exists("tex_enemy_crusher")) {
+      generateCircleTexture(this, "tex_enemy_crusher", 23, 0xe8a95a);
+    }
+
+    if (!this.textures.exists("tex_pickup_xp")) {
+      generateCircleTexture(this, "tex_pickup_xp", 6, 0x5ad8ff);
+    }
+
+    if (!this.textures.exists("tex_pickup_credits")) {
+      generateCircleTexture(this, "tex_pickup_credits", 8, 0xffd569);
+    }
+
+    if (!this.textures.exists("tex_pickup_material")) {
+      generateCircleTexture(this, "tex_pickup_material", 8, 0x8fff8c);
+    }
+
+    if (!this.textures.exists("tex_pickup_weapon")) {
+      generateCircleTexture(this, "tex_pickup_weapon", 9, 0xffa7ff);
+    }
+
+    if (!this.textures.exists("tex_pickup_attachment")) {
+      generateCircleTexture(this, "tex_pickup_attachment", 9, 0xbfb8ff);
+    }
+
+    if (!this.textures.exists("fx_muzzle")) {
+      generateCircleTexture(this, "fx_muzzle", 8, 0xffa45e);
+    }
+
+    if (!this.textures.exists("fx_hit")) {
+      generateCircleTexture(this, "fx_hit", 9, 0xffef9a);
+    }
+
+    if (!this.textures.exists("fx_levelup")) {
+      generateCircleTexture(this, "fx_levelup", 20, 0x83f4ff);
+    }
+
+    if (!this.textures.exists("fx_explosion_a")) {
+      generateCircleTexture(this, "fx_explosion_a", 10, 0xffb86e);
+    }
+
+    if (!this.textures.exists("fx_explosion_b")) {
+      generateCircleTexture(this, "fx_explosion_b", 13, 0xff7d63);
+    }
+
+    if (!this.textures.exists("fx_explosion_c")) {
+      generateCircleTexture(this, "fx_explosion_c", 7, 0xfff3aa);
+    }
 
     this.scene.start("MainMenuScene");
   }
