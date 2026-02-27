@@ -92,6 +92,8 @@ const INITIAL_MOVE_DELAY = 115;
 const MIN_MOVE_DELAY = 58;
 const SPEED_UP_EVERY = 4;
 const SPEED_STEP = 5;
+const MAX_QUEUED_TURNS = 2;
+const MAX_STEPS_PER_FRAME = 3;
 
 const DIRECTION_ORDER = ['up', 'right', 'down', 'left'];
 const DIRECTION_VECTORS = {
@@ -103,6 +105,10 @@ const DIRECTION_VECTORS = {
 
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
+const snakePanel = document.querySelector('#snakeScreen .game-panel');
+
+const boardLayerCanvas = document.createElement('canvas');
+const boardLayerContext = boardLayerCanvas.getContext('2d');
 
 const snakeScoreElement = document.getElementById('score');
 const snakeHighScoreElement = document.getElementById('highScore');
@@ -136,7 +142,7 @@ let lastFrameTime = 0;
 let accumulatedTime = 0;
 
 function resizeSnakeCanvas() {
-  const cssSize = Math.floor(canvas.clientWidth);
+  const cssSize = Math.floor(canvas.getBoundingClientRect().width);
 
   if (cssSize <= 0) {
     return;
@@ -148,6 +154,42 @@ function resizeSnakeCanvas() {
   if (canvas.width !== nextSize || canvas.height !== nextSize) {
     canvas.width = nextSize;
     canvas.height = nextSize;
+    rebuildSnakeBoardLayer();
+  }
+}
+
+function rebuildSnakeBoardLayer() {
+  if (!canvas.width || !canvas.height || !boardLayerContext) {
+    return;
+  }
+
+  if (boardLayerCanvas.width !== canvas.width || boardLayerCanvas.height !== canvas.height) {
+    boardLayerCanvas.width = canvas.width;
+    boardLayerCanvas.height = canvas.height;
+  }
+
+  const boardSize = boardLayerCanvas.width;
+  const cellSize = boardSize / GRID_SIZE;
+
+  boardLayerContext.clearRect(0, 0, boardSize, boardSize);
+  boardLayerContext.fillStyle = '#070f25';
+  boardLayerContext.fillRect(0, 0, boardSize, boardSize);
+
+  boardLayerContext.strokeStyle = 'rgba(173, 194, 236, 0.12)';
+  boardLayerContext.lineWidth = Math.max(1, boardSize / 520);
+
+  for (let index = 0; index <= GRID_SIZE; index += 1) {
+    const offset = index * cellSize;
+
+    boardLayerContext.beginPath();
+    boardLayerContext.moveTo(offset, 0);
+    boardLayerContext.lineTo(offset, boardSize);
+    boardLayerContext.stroke();
+
+    boardLayerContext.beginPath();
+    boardLayerContext.moveTo(0, offset);
+    boardLayerContext.lineTo(boardSize, offset);
+    boardLayerContext.stroke();
   }
 }
 
@@ -245,9 +287,22 @@ function queueSnakeTurn(turnDirection) {
     return;
   }
 
-  if (queuedTurns.length < 4) {
-    queuedTurns.push(turnDirection);
+  if (turnDirection !== 'left' && turnDirection !== 'right') {
+    return;
   }
+
+  const lastQueuedTurn = queuedTurns[queuedTurns.length - 1];
+
+  if (lastQueuedTurn === turnDirection) {
+    return;
+  }
+
+  if (queuedTurns.length >= MAX_QUEUED_TURNS) {
+    queuedTurns[queuedTurns.length - 1] = turnDirection;
+    return;
+  }
+
+  queuedTurns.push(turnDirection);
 }
 
 function moveSnake() {
@@ -308,27 +363,12 @@ function moveSnake() {
 }
 
 function drawSnakeBoard() {
-  const boardSize = canvas.width;
-  const cellSize = boardSize / GRID_SIZE;
+  if (boardLayerCanvas.width !== canvas.width || boardLayerCanvas.height !== canvas.height) {
+    rebuildSnakeBoardLayer();
+  }
 
-  ctx.fillStyle = '#070f25';
-  ctx.fillRect(0, 0, boardSize, boardSize);
-
-  ctx.strokeStyle = 'rgba(173, 194, 236, 0.12)';
-  ctx.lineWidth = Math.max(1, boardSize / 520);
-
-  for (let index = 0; index <= GRID_SIZE; index += 1) {
-    const offset = index * cellSize;
-
-    ctx.beginPath();
-    ctx.moveTo(offset, 0);
-    ctx.lineTo(offset, boardSize);
-    ctx.stroke();
-
-    ctx.beginPath();
-    ctx.moveTo(0, offset);
-    ctx.lineTo(boardSize, offset);
-    ctx.stroke();
+  if (boardLayerCanvas.width && boardLayerCanvas.height) {
+    ctx.drawImage(boardLayerCanvas, 0, 0);
   }
 }
 
@@ -392,14 +432,20 @@ function snakeGameLoop(timestamp) {
 
   if (snakeRunning && !snakePaused && !snakeGameOver) {
     accumulatedTime += clamp(elapsed, 0, 120);
+    let steppedFrames = 0;
 
-    while (accumulatedTime >= moveDelay) {
+    while (accumulatedTime >= moveDelay && steppedFrames < MAX_STEPS_PER_FRAME) {
       moveSnake();
       accumulatedTime -= moveDelay;
+      steppedFrames += 1;
 
       if (snakeGameOver) {
         break;
       }
+    }
+
+    if (steppedFrames === MAX_STEPS_PER_FRAME && accumulatedTime > moveDelay) {
+      accumulatedTime = moveDelay * 0.5;
     }
   }
 
@@ -426,6 +472,20 @@ function pauseSnakeIfNeeded() {
   if (snakeRunning && !snakePaused && !snakeGameOver) {
     toggleSnakePause(true);
   }
+}
+
+function setupSnakeResizeTracking() {
+  if (!snakePanel || typeof ResizeObserver !== 'function') {
+    return;
+  }
+
+  const resizeObserver = new ResizeObserver(() => {
+    if (currentScreen === 'snake') {
+      resizeSnakeCanvas();
+    }
+  });
+
+  resizeObserver.observe(snakePanel);
 }
 
 function bindInstantButton(button, handler) {
@@ -785,6 +845,7 @@ function init() {
   updateColorHud();
 
   showScreen('menu');
+  setupSnakeResizeTracking();
   requestAnimationFrame(snakeGameLoop);
 }
 

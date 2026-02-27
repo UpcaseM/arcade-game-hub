@@ -103,6 +103,13 @@ body {
   display: grid;
   gap: 0.6rem;
   background: linear-gradient(145deg, rgba(21, 35, 71, 0.92), rgba(13, 23, 48, 0.92));
+  transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.game-card:hover {
+  transform: translateY(-3px);
+  border-color: rgba(150, 182, 255, 0.46);
+  box-shadow: 0 16px 28px rgba(3, 8, 24, 0.35);
 }
 
 .game-card h2 {
@@ -165,7 +172,7 @@ body {
 
 .snake-shell {
   display: grid;
-  grid-template-columns: 4.2rem minmax(220px, 1fr) 4.2rem;
+  grid-template-columns: clamp(3.2rem, 9vw, 4.2rem) minmax(220px, 1fr) clamp(3.2rem, 9vw, 4.2rem);
   align-items: center;
   gap: 0.6rem;
 }
@@ -209,11 +216,20 @@ body {
 }
 
 .turn-btn {
+  width: 100%;
+  min-width: 0;
   min-height: clamp(4.2rem, 16vw, 6rem);
   border-radius: 0.85rem;
   font-size: clamp(1.5rem, 5vw, 2rem);
+  font-weight: 700;
   padding: 0;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
+}
+
+.turn-btn:active {
+  filter: brightness(1.15);
 }
 
 .actions {
@@ -329,7 +345,14 @@ button:disabled {
 
 @media (max-width: 860px) {
   .snake-shell {
-    grid-template-columns: 3.35rem minmax(180px, 1fr) 3.35rem;
+    grid-template-columns: clamp(2.9rem, 12vw, 3.5rem) minmax(180px, 1fr) clamp(2.9rem, 12vw, 3.5rem);
+  }
+}
+
+@media (pointer: coarse) {
+  .turn-btn {
+    min-height: clamp(5rem, 20vw, 7.2rem);
+    font-size: clamp(1.8rem, 7vw, 2.3rem);
   }
 }
 
@@ -347,7 +370,7 @@ button:disabled {
   }
 
   .turn-btn {
-    min-height: 3.8rem;
+    min-height: clamp(4.5rem, 27vw, 6rem);
   }
 
   .actions {
