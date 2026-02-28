@@ -129,6 +129,17 @@ type CombatPerks = {
   knockbackMul: number;
 };
 
+type CoreUpgradeStacks = {
+  pierce: number;
+  warhead: number;
+  arc: number;
+  guidance: number;
+  overdrive: number;
+  closeQuarters: number;
+  overcharge: number;
+  total: number;
+};
+
 type SingularityMeta = {
   x: number;
   y: number;
@@ -469,6 +480,7 @@ export class GameScene extends Phaser.Scene {
 
   private setupDone = false;
   private singularities: SingularityMeta[] = [];
+  private upgradeAuraPulseMs = 0;
 
   constructor() {
     super("GameScene");
@@ -536,6 +548,7 @@ export class GameScene extends Phaser.Scene {
     this.rawRight = false;
     this.autoPausedByVisibility = false;
     this.singularities = [];
+    this.upgradeAuraPulseMs = 0;
 
     this.syncLoadout();
     this.refreshDerivedStats();
@@ -764,6 +777,7 @@ export class GameScene extends Phaser.Scene {
     this.updateEnemies(stepMs);
     this.updateSingularities(stepMs);
     this.updatePickups(stepMs);
+    this.updateUpgradeAuraFx(stepMs);
     this.guardMotionStall(stepMs);
 
     this.checkLevelUpQueue();
@@ -1037,10 +1051,32 @@ export class GameScene extends Phaser.Scene {
     const sourceWeaponId = this.weapon.weaponId;
     const pellets = this.weaponStats.pellets;
     const fx = weaponFxProfile(sourceWeaponId);
+    const stacks = this.getCoreUpgradeStacks();
     const baseAimAngle = this.player.rotation + PLAYER_FORWARD_ROTATION_OFFSET;
-    const holdRateMul = 1 + this.combatPerks.overdriveRateMul * clamp(this.triggerHoldMs / 2200, 0, 1);
+    const overdriveHeat = clamp(this.triggerHoldMs / 2200, 0, 1);
+    const holdRateMul = 1 + this.combatPerks.overdriveRateMul * overdriveHeat;
     const dynamicSpreadMul = this.weapon.weaponId === "tempest_minigun" ? 1 + clamp(this.triggerHoldMs / 2400, 0, 1) * 0.28 : 1;
     const spreadBase = this.weaponStats.spreadDeg * dynamicSpreadMul;
+    const visualScaleMul = 1 + stacks.warhead * 0.08 + stacks.overcharge * 0.04;
+    const visualBodyMul = 1 + stacks.warhead * 0.06 + stacks.pierce * 0.03;
+    const visualTrailScale = fx.trailScale * (1 + stacks.guidance * 0.12 + stacks.arc * 0.08);
+    const visualTrailInterval = Math.max(12, fx.trailIntervalMs - stacks.guidance * 4 - stacks.pierce * 2);
+    const visualImpactScale = fx.impactScaleMul * (1 + stacks.warhead * 0.14 + stacks.arc * 0.08);
+
+    const shotTint =
+      stacks.warhead >= Math.max(stacks.arc, stacks.guidance) && stacks.warhead > 0
+        ? 0xffbe98
+        : stacks.arc >= stacks.guidance && stacks.arc > 0
+          ? 0xd2b6ff
+          : stacks.guidance > 0
+            ? 0xa3e3ff
+            : fx.bulletTint;
+    const muzzleTint = overdriveHeat > 0.58 || stacks.overdrive > 0 ? 0xffd38d : shotTint;
+    const impactTint = stacks.warhead > 0 ? 0xffc8a3 : fx.impactTint;
+    const impactCritTint = stacks.arc > 0 ? 0xf2e5ff : fx.impactCritTint;
+    const muzzleScaleMul = fx.muzzleScaleMul * (1 + stacks.overdrive * 0.05 + overdriveHeat * 0.22);
+    const bulletBlendMode =
+      stacks.arc > 0 && fx.bulletBlendMode === Phaser.BlendModes.ADD ? Phaser.BlendModes.SCREEN : fx.bulletBlendMode;
 
     for (let index = 0; index < pellets; index += 1) {
       const bullet = this.playerBullets.get(this.player.x, this.player.y, "tex_bullet") as Phaser.Physics.Arcade.Image | null;
@@ -1052,12 +1088,16 @@ export class GameScene extends Phaser.Scene {
       bullet.setActive(true).setVisible(true);
       bullet.body!.enable = true;
       bullet.setDepth(7);
-      bullet.setScale(PLAYER_BULLET_SCALE * fx.bulletScaleMul);
-      bullet.setBlendMode(fx.bulletBlendMode);
+      bullet.setScale(PLAYER_BULLET_SCALE * fx.bulletScaleMul * visualScaleMul);
+      bullet.setBlendMode(bulletBlendMode);
       bullet.clearTint();
-      bullet.setTint(fx.bulletTint);
+      bullet.setTint(shotTint);
       const body = bullet.body as Phaser.Physics.Arcade.Body;
-      body.setSize(Math.round(PLAYER_BULLET_BODY_SIZE * fx.bulletBodyMul), Math.round(PLAYER_BULLET_BODY_SIZE * fx.bulletBodyMul), true);
+      body.setSize(
+        Math.round(PLAYER_BULLET_BODY_SIZE * fx.bulletBodyMul * visualBodyMul),
+        Math.round(PLAYER_BULLET_BODY_SIZE * fx.bulletBodyMul * visualBodyMul),
+        true
+      );
 
       const spread = Phaser.Math.DegToRad(randomRange(-spreadBase * 0.5, spreadBase * 0.5));
       const angle = baseAimAngle + spread;
@@ -1069,9 +1109,20 @@ export class GameScene extends Phaser.Scene {
         this.player.x + Math.cos(angle) * (PLAYER_FORWARD_OFFSET - 4),
         this.player.y + Math.sin(angle) * (PLAYER_FORWARD_OFFSET - 4),
         angle,
-        fx.muzzleTint,
-        fx.muzzleScaleMul
+        muzzleTint,
+        muzzleScaleMul
       );
+
+      if ((stacks.overdrive > 0 || stacks.warhead > 0) && Math.random() < 0.35) {
+        const offset = randomRange(8, 16);
+        this.spawnMuzzleFlash(
+          this.player.x + Math.cos(angle) * (PLAYER_FORWARD_OFFSET - offset),
+          this.player.y + Math.sin(angle) * (PLAYER_FORWARD_OFFSET - offset),
+          angle + randomRange(-0.08, 0.08),
+          muzzleTint,
+          muzzleScaleMul * 0.72
+        );
+      }
 
       const quantumSplitBonus = sourceWeaponId === "quantum_splitter" && this.getUpgradeStack("up_arc_chain") >= 2 ? 1 : 0;
 
@@ -1080,13 +1131,13 @@ export class GameScene extends Phaser.Scene {
         damage: this.weaponStats.damage,
         critChance: this.playerCritChance,
         critDamage: this.playerCritDamage,
-        trailTickMs: randomRange(0, fx.trailIntervalMs),
-        trailIntervalMs: fx.trailIntervalMs,
-        trailTint: fx.trailTint,
-        trailScale: fx.trailScale,
-        impactTint: fx.impactTint,
-        impactCritTint: fx.impactCritTint,
-        impactScale: fx.impactScaleMul,
+        trailTickMs: randomRange(0, visualTrailInterval),
+        trailIntervalMs: visualTrailInterval,
+        trailTint: shotTint !== fx.bulletTint ? shotTint : fx.trailTint,
+        trailScale: visualTrailScale,
+        impactTint,
+        impactCritTint,
+        impactScale: visualImpactScale,
         pierceLeft: this.combatPerks.pierce,
         splashRadius: this.combatPerks.splashRadius,
         splashDamageMul: this.combatPerks.splashDamageMul,
@@ -1459,6 +1510,25 @@ export class GameScene extends Phaser.Scene {
   private applySplashDamage(x: number, y: number, radius: number, baseDamage: number, exclude: Phaser.Physics.Arcade.Image): void {
     const enemies = this.enemies.getChildren() as Phaser.Physics.Arcade.Image[];
     const radiusSq = radius * radius;
+    const warheadStacks = this.getUpgradeStack("up_warhead");
+
+    if (this.isInsideCamera(x, y, radius * 0.7)) {
+      const ring = this.add.image(x, y, "fx_levelup");
+      ring.setDepth(7);
+      ring.setBlendMode(Phaser.BlendModes.ADD);
+      ring.setTint(warheadStacks > 0 ? 0xffbe95 : 0xffcfa8);
+      ring.setScale(Math.max(0.24, radius / 220));
+      ring.setAlpha(0.48);
+      this.tweens.add({
+        targets: ring,
+        alpha: 0,
+        scaleX: ring.scaleX * 1.7,
+        scaleY: ring.scaleY * 1.7,
+        duration: 150,
+        ease: "Quad.Out",
+        onComplete: () => ring.destroy()
+      });
+    }
 
     for (let index = 0; index < enemies.length; index += 1) {
       const enemy = enemies[index];
@@ -1497,6 +1567,8 @@ export class GameScene extends Phaser.Scene {
     const sourceMeta = this.enemyMeta.get(source);
     const chainTargets: Array<{ enemy: Phaser.Physics.Arcade.Image; sq: number }> = [];
     const maxRangeSq = 340 * 340;
+    const arcStacks = this.getUpgradeStack("up_arc_chain");
+    const beamWidth = 2 + arcStacks * 0.75;
 
     if (!sourceMeta) {
       return;
@@ -1539,7 +1611,7 @@ export class GameScene extends Phaser.Scene {
       tMeta.hp -= amount;
       tMeta.hitFlashMs = 90;
       this.spawnHitFx(target.x, target.y, enemyVisual(tMeta.def.id).hitFxScale * 0.9, false, tint);
-      this.spawnChainBeamFx(source.x, source.y, target.x, target.y, tint);
+      this.spawnChainBeamFx(source.x, source.y, target.x, target.y, tint, beamWidth);
 
       if (tMeta.hp <= 0) {
         this.killEnemy(target, tMeta);
@@ -1547,14 +1619,14 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  private spawnChainBeamFx(x0: number, y0: number, x1: number, y1: number, tint: number): void {
+  private spawnChainBeamFx(x0: number, y0: number, x1: number, y1: number, tint: number, width = 2): void {
     if (!this.isInsideCamera((x0 + x1) * 0.5, (y0 + y1) * 0.5, 96)) {
       return;
     }
 
     const line = this.add.graphics();
     line.setDepth(8);
-    line.lineStyle(2, tint, 0.95);
+    line.lineStyle(width, tint, 0.95);
     line.beginPath();
     line.moveTo(x0, y0);
     const mx = (x0 + x1) * 0.5 + randomRange(-14, 14);
@@ -2712,6 +2784,128 @@ export class GameScene extends Phaser.Scene {
     return count;
   }
 
+  private getCoreUpgradeStacks(): CoreUpgradeStacks {
+    const stacks: CoreUpgradeStacks = {
+      pierce: this.getUpgradeStack("up_pierce_rounds"),
+      warhead: this.getUpgradeStack("up_warhead"),
+      arc: this.getUpgradeStack("up_arc_chain"),
+      guidance: this.getUpgradeStack("up_guidance"),
+      overdrive: this.getUpgradeStack("up_overdrive"),
+      closeQuarters: this.getUpgradeStack("up_close_quarters"),
+      overcharge: this.getUpgradeStack("up_overcharge_core"),
+      total: 0
+    };
+
+    stacks.total =
+      stacks.pierce +
+      stacks.warhead +
+      stacks.arc +
+      stacks.guidance +
+      stacks.overdrive +
+      stacks.closeQuarters +
+      stacks.overcharge;
+
+    return stacks;
+  }
+
+  private getPrimaryAuraTint(stacks: CoreUpgradeStacks): number {
+    if (stacks.warhead >= stacks.arc && stacks.warhead >= stacks.guidance && stacks.warhead >= stacks.overdrive) {
+      return 0xffb58f;
+    }
+
+    if (stacks.arc >= stacks.guidance && stacks.arc >= stacks.overdrive) {
+      return 0xd7b3ff;
+    }
+
+    if (stacks.guidance >= stacks.overdrive) {
+      return 0x9fd6ff;
+    }
+
+    if (stacks.overdrive > 0) {
+      return 0xffdb98;
+    }
+
+    return 0x9df1ff;
+  }
+
+  private getPerkSummaryText(): string {
+    const stacks = this.getCoreUpgradeStacks();
+    const parts: string[] = [];
+
+    if (stacks.pierce > 0) parts.push(`P${stacks.pierce}`);
+    if (stacks.warhead > 0) parts.push(`W${stacks.warhead}`);
+    if (stacks.arc > 0) parts.push(`A${stacks.arc}`);
+    if (stacks.guidance > 0) parts.push(`G${stacks.guidance}`);
+    if (stacks.overdrive > 0) parts.push(`O${stacks.overdrive}`);
+
+    if (parts.length === 0) {
+      return "Perks -";
+    }
+
+    return `Perks ${parts.join("  ")}`;
+  }
+
+  private updateUpgradeAuraFx(deltaMs: number): void {
+    const stacks = this.getCoreUpgradeStacks();
+
+    if (stacks.total <= 0 || this.pauseReason || this.runEnded) {
+      return;
+    }
+
+    this.upgradeAuraPulseMs -= deltaMs;
+
+    if (this.upgradeAuraPulseMs > 0) {
+      return;
+    }
+
+    const overdriveBoost = stacks.overdrive > 0 ? clamp(this.triggerHoldMs / 2200, 0, 1) : 0;
+    const interval = Math.max(110, 360 - stacks.total * 24 - overdriveBoost * 130);
+    this.upgradeAuraPulseMs = interval;
+
+    const tint = this.getPrimaryAuraTint(stacks);
+    const radius = 26 + stacks.total * 3;
+
+    const ring = this.add.image(this.player.x, this.player.y, "fx_levelup");
+    ring.setDepth(8);
+    ring.setBlendMode(Phaser.BlendModes.ADD);
+    ring.setTint(tint);
+    ring.setScale(0.18 + stacks.total * 0.01);
+    ring.setAlpha(0.48 + overdriveBoost * 0.24);
+
+    this.tweens.add({
+      targets: ring,
+      alpha: 0,
+      scaleX: 0.72 + stacks.total * 0.02,
+      scaleY: 0.72 + stacks.total * 0.02,
+      duration: 210,
+      ease: "Quad.Out",
+      onComplete: () => ring.destroy()
+    });
+
+    const sparkCount = Math.min(12, 3 + stacks.total);
+    for (let index = 0; index < sparkCount; index += 1) {
+      const angle = randomRange(0, Math.PI * 2);
+      const spark = this.add.image(this.player.x + Math.cos(angle) * 14, this.player.y + Math.sin(angle) * 14, "fx_hit");
+      spark.setDepth(8);
+      spark.setBlendMode(Phaser.BlendModes.ADD);
+      spark.setTint(tint);
+      spark.setScale(randomRange(0.14, 0.24));
+      spark.setAlpha(0.85);
+
+      this.tweens.add({
+        targets: spark,
+        x: this.player.x + Math.cos(angle) * randomRange(radius * 0.9, radius * 1.4),
+        y: this.player.y + Math.sin(angle) * randomRange(radius * 0.9, radius * 1.4),
+        alpha: 0,
+        scaleX: spark.scaleX * 1.8,
+        scaleY: spark.scaleY * 1.8,
+        duration: randomInt(140, 260),
+        ease: "Sine.Out",
+        onComplete: () => spark.destroy()
+      });
+    }
+  }
+
   private recomputeCombatPerks(): void {
     const perks = emptyCombatPerks();
 
@@ -3378,7 +3572,8 @@ export class GameScene extends Phaser.Scene {
       reloadText: this.weaponReloadMs > 0 ? `Reload ${(this.weaponReloadMs / 1000).toFixed(1)}s` : "Ready",
       missionText: this.level.name,
       objectiveText: `Kills ${this.kills} / ${this.level.killTarget}`,
-      creditsText: String(gameState.saveData.credits)
+      creditsText: String(gameState.saveData.credits),
+      perkText: this.getPerkSummaryText()
     });
   }
 
@@ -3417,12 +3612,15 @@ export class GameScene extends Phaser.Scene {
 
     this.refreshDerivedStats();
     this.spawnUpgradeApplyFx(upgrade);
+    this.upgradeAuraPulseMs = 0;
     this.pendingUpgradeOptions = null;
     this.upgradePauseStartedMs = 0;
     this.setPause(null);
     this.game.events.emit(EVENT_HIDE_UPGRADE);
     this.pushDebugEvent(`upgrade:pick:${upgrade.id}${auto ? ":auto" : ""}`);
-    this.game.events.emit(EVENT_TOAST, auto ? `Auto upgrade applied: ${upgrade.name}` : `Upgrade: ${upgrade.name}`);
+    const stackCount = this.getUpgradeStack(upgrade.id);
+    const prefix = auto ? "Auto upgrade" : "Upgrade";
+    this.game.events.emit(EVENT_TOAST, `${prefix} x${stackCount}: ${upgrade.name}`);
   }
 
   private onUpgradePick = (upgradeId: string): void => {

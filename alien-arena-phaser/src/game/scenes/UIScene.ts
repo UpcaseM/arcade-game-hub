@@ -30,6 +30,7 @@ interface HudPayload {
   missionText: string;
   objectiveText: string;
   creditsText: string;
+  perkText: string;
 }
 
 interface UpgradeOption {
@@ -230,7 +231,7 @@ export class UIScene extends Phaser.Scene {
     );
 
     this.hudWeapon.setText(
-      `${payload.weaponName}\n${payload.weaponStatsText}\n${payload.ammoText}\n${payload.reloadText}`
+      `${payload.weaponName}\n${payload.weaponStatsText}\n${payload.ammoText}\n${payload.reloadText}\n${payload.perkText}`
     );
   }
 
