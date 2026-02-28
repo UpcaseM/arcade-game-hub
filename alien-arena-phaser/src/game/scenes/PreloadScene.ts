@@ -19,6 +19,29 @@ function generateArrowTexture(scene: Phaser.Scene, key: string, color: number): 
   g.destroy();
 }
 
+function generateCapsuleTexture(scene: Phaser.Scene, key: string, width: number, height: number, color: number): void {
+  const g = scene.add.graphics();
+  g.fillStyle(color, 1);
+  g.fillRoundedRect(0, 0, width, height, Math.min(width, height) * 0.45);
+  g.generateTexture(key, width, height);
+  g.destroy();
+}
+
+function generateDiamondTexture(scene: Phaser.Scene, key: string, size: number, color: number): void {
+  const half = size * 0.5;
+  const g = scene.add.graphics();
+  g.fillStyle(color, 1);
+  g.beginPath();
+  g.moveTo(half, 0);
+  g.lineTo(size, half);
+  g.lineTo(half, size);
+  g.lineTo(0, half);
+  g.closePath();
+  g.fillPath();
+  g.generateTexture(key, size, size);
+  g.destroy();
+}
+
 export class PreloadScene extends Phaser.Scene {
   constructor() {
     super("PreloadScene");
@@ -57,6 +80,8 @@ export class PreloadScene extends Phaser.Scene {
     this.load.image("icon_up_phase_barrier", `${ICON_ROOT}/shield.svg`);
     this.load.image("icon_up_close_quarters", `${ICON_ROOT}/sword.svg`);
     this.load.image("icon_up_overcharge_core", `${ICON_ROOT}/cpu.svg`);
+    this.load.image("icon_up_missile_pod", `${ICON_ROOT}/rocket.svg`);
+    this.load.image("icon_up_super_weapon", `${ICON_ROOT}/star.svg`);
     this.load.image("icon_up_default", `${ICON_ROOT}/sparkles.svg`);
   }
 
@@ -67,6 +92,26 @@ export class PreloadScene extends Phaser.Scene {
 
     if (!this.textures.exists("tex_bullet")) {
       generateCircleTexture(this, "tex_bullet", 4, 0x79edff);
+    }
+
+    if (!this.textures.exists("tex_bullet_vulcan")) {
+      generateCapsuleTexture(this, "tex_bullet_vulcan", 8, 14, 0x8ef3ff);
+    }
+
+    if (!this.textures.exists("tex_bullet_laser")) {
+      generateCapsuleTexture(this, "tex_bullet_laser", 6, 24, 0xc7d8ff);
+    }
+
+    if (!this.textures.exists("tex_bullet_quantum")) {
+      generateDiamondTexture(this, "tex_bullet_quantum", 14, 0xc9b4ff);
+    }
+
+    if (!this.textures.exists("tex_bullet_missile")) {
+      generateCapsuleTexture(this, "tex_bullet_missile", 10, 18, 0xffbf8a);
+    }
+
+    if (!this.textures.exists("tex_bullet_super")) {
+      generateDiamondTexture(this, "tex_bullet_super", 16, 0xfff0a8);
     }
 
     if (!this.textures.exists("tex_enemy_bullet")) {
@@ -163,6 +208,14 @@ export class PreloadScene extends Phaser.Scene {
 
     if (!this.textures.exists("icon_up_overcharge_core")) {
       generateCircleTexture(this, "icon_up_overcharge_core", 10, 0xfff1b7);
+    }
+
+    if (!this.textures.exists("icon_up_missile_pod")) {
+      generateCircleTexture(this, "icon_up_missile_pod", 10, 0xffcf9f);
+    }
+
+    if (!this.textures.exists("icon_up_super_weapon")) {
+      generateCircleTexture(this, "icon_up_super_weapon", 10, 0xfff0ab);
     }
 
     if (!this.textures.exists("icon_up_default")) {

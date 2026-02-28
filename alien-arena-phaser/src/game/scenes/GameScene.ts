@@ -138,6 +138,8 @@ type CoreUpgradeStacks = {
   overdrive: number;
   closeQuarters: number;
   overcharge: number;
+  missilePod: number;
+  superWeapon: number;
   total: number;
 };
 
@@ -345,6 +347,40 @@ function weaponFxProfile(weaponId: string): WeaponFxProfile {
     };
   }
 
+  if (weaponId === "pod_missile") {
+    return {
+      bulletScaleMul: 1.26,
+      bulletBodyMul: 1.2,
+      bulletTint: 0xffc08f,
+      bulletBlendMode: Phaser.BlendModes.ADD,
+      trailTint: 0xffad7f,
+      trailScale: 0.42,
+      trailIntervalMs: 22,
+      muzzleTint: 0xffc89d,
+      muzzleScaleMul: 1.2,
+      impactTint: 0xffc7a7,
+      impactCritTint: 0xffecdd,
+      impactScaleMul: 1.45
+    };
+  }
+
+  if (weaponId === "super_weapon") {
+    return {
+      bulletScaleMul: 1.44,
+      bulletBodyMul: 1.34,
+      bulletTint: 0xffefad,
+      bulletBlendMode: Phaser.BlendModes.SCREEN,
+      trailTint: 0xffe18f,
+      trailScale: 0.48,
+      trailIntervalMs: 16,
+      muzzleTint: 0xffe9aa,
+      muzzleScaleMul: 1.42,
+      impactTint: 0xffebb2,
+      impactCritTint: 0xfff8dc,
+      impactScaleMul: 1.62
+    };
+  }
+
   return {
     bulletScaleMul: 1,
     bulletBodyMul: 1,
@@ -482,6 +518,11 @@ export class GameScene extends Phaser.Scene {
   private setupDone = false;
   private singularities: SingularityMeta[] = [];
   private upgradeAuraPulseMs = 0;
+  private supportMissileCooldownMs = 0;
+  private superCharge = 0;
+  private superActiveMs = 0;
+  private superFxPulseMs = 0;
+  private superBarrageCooldownMs = 0;
 
   constructor() {
     super("GameScene");
@@ -550,6 +591,11 @@ export class GameScene extends Phaser.Scene {
     this.autoPausedByVisibility = false;
     this.singularities = [];
     this.upgradeAuraPulseMs = 0;
+    this.supportMissileCooldownMs = 0;
+    this.superCharge = 0;
+    this.superActiveMs = 0;
+    this.superFxPulseMs = 0;
+    this.superBarrageCooldownMs = 0;
 
     this.syncLoadout();
     this.refreshDerivedStats();
@@ -773,7 +819,9 @@ export class GameScene extends Phaser.Scene {
 
     this.processSpawns();
     this.updatePlayer(stepMs);
+    this.updateSuperSystems(stepMs);
     this.updateWeapon(stepMs);
+    this.updateSupportWeapons(stepMs);
     this.updateBullets(stepMs);
     this.updateEnemies(stepMs);
     this.updateSingularities(stepMs);
@@ -1016,6 +1064,328 @@ export class GameScene extends Phaser.Scene {
     this.player.rotation = smoothAngle(this.player.rotation, targetAngle - PLAYER_FORWARD_ROTATION_OFFSET, 0.2);
   }
 
+  private resolveBulletTextureKey(key: string): string {
+    if (this.textures.exists(key)) {
+      return key;
+    }
+
+    return "tex_bullet";
+  }
+
+  private getBulletTextureKey(sourceWeaponId: string, stacks: CoreUpgradeStacks, superActive = this.isSuperActive()): string {
+    if (superActive || sourceWeaponId === "super_weapon") {
+      return "tex_bullet_super";
+    }
+
+    if (sourceWeaponId === "pod_missile" || sourceWeaponId === "seeker_launcher") {
+      return "tex_bullet_missile";
+    }
+
+    if (sourceWeaponId === "rail_lancer" || sourceWeaponId === "sunlance_cannon") {
+      return "tex_bullet_laser";
+    }
+
+    if (sourceWeaponId === "void_blaster" || sourceWeaponId === "quantum_splitter" || stacks.arc > 0) {
+      return "tex_bullet_quantum";
+    }
+
+    if (sourceWeaponId === "tempest_minigun" || sourceWeaponId === "nova_smg" || sourceWeaponId === "pulse_rifle") {
+      return "tex_bullet_vulcan";
+    }
+
+    if (stacks.warhead > 0) {
+      return "tex_bullet_missile";
+    }
+
+    return "tex_bullet";
+  }
+
+  private getSuperWeaponStacks(): number {
+    return this.getUpgradeStack("up_super_weapon");
+  }
+
+  private getMissilePodStacks(): number {
+    return this.getUpgradeStack("up_missile_pod");
+  }
+
+  private isSuperActive(): boolean {
+    return this.superActiveMs > 0;
+  }
+
+  private addSuperCharge(amount: number): void {
+    const superStacks = this.getSuperWeaponStacks();
+
+    if (superStacks <= 0 || this.isSuperActive()) {
+      return;
+    }
+
+    const gainMul = 1 + (superStacks - 1) * 0.26;
+    this.superCharge = clamp(this.superCharge + amount * gainMul, 0, 100);
+  }
+
+  private activateSuperWeapon(superStacks: number): void {
+    if (superStacks <= 0) {
+      return;
+    }
+
+    this.superCharge = 0;
+    this.superActiveMs = 6200 + superStacks * 2300;
+    this.superFxPulseMs = 0;
+    this.superBarrageCooldownMs = 140;
+    this.game.events.emit(EVENT_TOAST, `SUPER ONLINE ${Math.round(this.superActiveMs / 1000)}s`);
+
+    const ring = this.add.image(this.player.x, this.player.y, "fx_levelup");
+    ring.setDepth(10);
+    ring.setBlendMode(Phaser.BlendModes.SCREEN);
+    ring.setTint(0xfff1ba);
+    ring.setScale(0.28);
+    ring.setAlpha(0.92);
+
+    this.tweens.add({
+      targets: ring,
+      alpha: 0,
+      scaleX: 1.35,
+      scaleY: 1.35,
+      duration: 360,
+      ease: "Cubic.Out",
+      onComplete: () => ring.destroy()
+    });
+  }
+
+  private updateSuperSystems(deltaMs: number): void {
+    const superStacks = this.getSuperWeaponStacks();
+
+    if (superStacks <= 0) {
+      this.superCharge = 0;
+      this.superActiveMs = 0;
+      this.superFxPulseMs = 0;
+      this.superBarrageCooldownMs = 0;
+      return;
+    }
+
+    if (this.superActiveMs <= 0 && this.superCharge >= 100) {
+      this.activateSuperWeapon(superStacks);
+    }
+
+    if (!this.isSuperActive()) {
+      return;
+    }
+
+    this.superActiveMs = Math.max(0, this.superActiveMs - deltaMs);
+    this.superFxPulseMs -= deltaMs;
+    this.superBarrageCooldownMs -= deltaMs;
+
+    if (this.superFxPulseMs <= 0) {
+      this.superFxPulseMs += Math.max(92, 168 - superStacks * 14);
+      const star = this.add.image(this.player.x, this.player.y, "icon_up_super_weapon");
+      star.setDepth(10);
+      star.setBlendMode(Phaser.BlendModes.ADD);
+      star.setDisplaySize(18 + superStacks * 2, 18 + superStacks * 2);
+      star.setTint(0xffefac);
+      star.setAlpha(0.88);
+
+      this.tweens.add({
+        targets: star,
+        alpha: 0,
+        scaleX: 1.6,
+        scaleY: 1.6,
+        duration: 170,
+        ease: "Sine.Out",
+        onComplete: () => star.destroy()
+      });
+    }
+
+    if (this.superBarrageCooldownMs <= 0) {
+      this.superBarrageCooldownMs += Math.max(180, 520 - superStacks * 58);
+      this.fireSuperBarrage(superStacks);
+    }
+
+    if (this.superActiveMs <= 0) {
+      this.game.events.emit(EVENT_TOAST, "SUPER ended");
+    }
+  }
+
+  private findNearestEnemies(x: number, y: number, maxRange: number, limit: number): Phaser.Physics.Arcade.Image[] {
+    const enemies = this.enemies.getChildren() as Phaser.Physics.Arcade.Image[];
+    const maxRangeSq = maxRange * maxRange;
+    const found: Array<{ enemy: Phaser.Physics.Arcade.Image; sq: number }> = [];
+
+    for (let index = 0; index < enemies.length; index += 1) {
+      const enemy = enemies[index];
+
+      if (!enemy.active) {
+        continue;
+      }
+
+      const sq = distSq(x, y, enemy.x, enemy.y);
+
+      if (sq > maxRangeSq) {
+        continue;
+      }
+
+      found.push({ enemy, sq });
+    }
+
+    found.sort((a, b) => a.sq - b.sq);
+    return found.slice(0, limit).map(item => item.enemy);
+  }
+
+  private spawnSupportProjectile(
+    x: number,
+    y: number,
+    angle: number,
+    sourceWeaponId: "pod_missile" | "super_weapon",
+    damage: number,
+    speed: number,
+    lifeMs: number,
+    homingStrength: number,
+    splashRadius: number,
+    splashDamageMul: number
+  ): void {
+    const bullet = this.playerBullets.get(x, y, "tex_bullet") as Phaser.Physics.Arcade.Image | null;
+
+    if (!bullet) {
+      return;
+    }
+
+    const stacks = this.getCoreUpgradeStacks();
+    const fx = weaponFxProfile(sourceWeaponId);
+    bullet.setActive(true).setVisible(true);
+    bullet.body!.enable = true;
+    bullet.setDepth(7);
+    bullet.setTexture(this.resolveBulletTextureKey(this.getBulletTextureKey(sourceWeaponId, stacks)));
+    bullet.setScale(PLAYER_BULLET_SCALE * fx.bulletScaleMul * (sourceWeaponId === "super_weapon" ? 1.18 : 1));
+    bullet.setBlendMode(fx.bulletBlendMode);
+    bullet.clearTint();
+    bullet.setTint(fx.bulletTint);
+    bullet.setRotation(angle - PLAYER_FORWARD_ROTATION_OFFSET);
+    bullet.setPosition(x, y);
+    bullet.setVelocity(Math.cos(angle) * speed, Math.sin(angle) * speed);
+
+    const body = bullet.body as Phaser.Physics.Arcade.Body;
+    body.setSize(Math.max(6, Math.round(PLAYER_BULLET_BODY_SIZE * fx.bulletBodyMul)), Math.max(6, Math.round(PLAYER_BULLET_BODY_SIZE * fx.bulletBodyMul)), true);
+
+    const chainBonus = sourceWeaponId === "super_weapon" ? 0.14 : 0.04;
+    this.bulletMeta.set(bullet, {
+      lifeMs,
+      damage,
+      critChance: this.playerCritChance * 0.55,
+      critDamage: this.playerCritDamage,
+      trailTickMs: randomRange(0, fx.trailIntervalMs),
+      trailIntervalMs: Math.max(12, fx.trailIntervalMs - 4),
+      trailTint: fx.trailTint,
+      trailScale: fx.trailScale * 1.15,
+      impactTint: fx.impactTint,
+      impactCritTint: fx.impactCritTint,
+      impactScale: fx.impactScaleMul,
+      pierceLeft: sourceWeaponId === "super_weapon" ? 1 : 0,
+      splashRadius,
+      splashDamageMul,
+      homingStrength,
+      homingTickMs: randomRange(0, 70),
+      knockback: sourceWeaponId === "super_weapon" ? 96 : 72,
+      chainChance: clamp(this.combatPerks.chainChance * 0.45 + chainBonus, 0, 0.75),
+      chainDamageMul: clamp(this.combatPerks.chainDamageMul * 0.56 + (sourceWeaponId === "super_weapon" ? 0.32 : 0.14), 0, 1.2),
+      isPlayerBullet: true,
+      sourceWeaponId,
+      splitLeft: 0
+    });
+  }
+
+  private fireSuperBarrage(superStacks: number): void {
+    const targets = this.findNearestEnemies(this.player.x, this.player.y, 980, Math.min(9, 3 + superStacks * 2));
+    const baseDamage = this.weaponStats.damage * (0.58 + superStacks * 0.1);
+    const speed = 760 + superStacks * 60;
+    const homing = 0.5 + superStacks * 0.08;
+    const splashRadius = 40 + superStacks * 12;
+    const splashMul = 0.46 + superStacks * 0.08;
+    const lifeMs = 900 + superStacks * 100;
+
+    if (targets.length === 0) {
+      const shots = 6 + superStacks;
+      for (let index = 0; index < shots; index += 1) {
+        const angle = this.player.rotation + PLAYER_FORWARD_ROTATION_OFFSET + (Math.PI * 2 * index) / shots;
+        this.spawnSupportProjectile(
+          this.player.x + Math.cos(angle) * 12,
+          this.player.y + Math.sin(angle) * 12,
+          angle,
+          "super_weapon",
+          baseDamage * 0.82,
+          speed * 0.9,
+          lifeMs,
+          homing,
+          splashRadius,
+          splashMul
+        );
+      }
+    } else {
+      for (let index = 0; index < targets.length; index += 1) {
+        const target = targets[index];
+        const angle = Phaser.Math.Angle.Between(this.player.x, this.player.y, target.x, target.y);
+        const spread = randomRange(-0.08, 0.08);
+        this.spawnSupportProjectile(
+          this.player.x + Math.cos(angle) * 12,
+          this.player.y + Math.sin(angle) * 12,
+          angle + spread,
+          "super_weapon",
+          baseDamage,
+          speed,
+          lifeMs,
+          homing,
+          splashRadius,
+          splashMul
+        );
+      }
+    }
+
+    this.cameras.main.shake(28 + superStacks * 4, 0.0015 + superStacks * 0.0003);
+  }
+
+  private updateSupportWeapons(deltaMs: number): void {
+    const podStacks = this.getMissilePodStacks();
+
+    if (podStacks <= 0) {
+      this.supportMissileCooldownMs = 0;
+      return;
+    }
+
+    this.supportMissileCooldownMs -= deltaMs;
+
+    if (this.supportMissileCooldownMs > 0) {
+      return;
+    }
+
+    const superActive = this.isSuperActive();
+    const cadence = Math.max(220, 980 - podStacks * 100 - (superActive ? 200 : 0));
+    this.supportMissileCooldownMs = cadence;
+    const podCount = Math.min(4, 1 + Math.floor((podStacks + 1) / 2));
+
+    for (let index = 0; index < podCount; index += 1) {
+      const side = index % 2 === 0 ? -1 : 1;
+      const row = Math.floor(index / 2);
+      const px = this.player.x + side * (20 + row * 16);
+      const py = this.player.y + (row === 0 ? 12 : -12);
+      const target = this.findNearestEnemy(px, py, 960);
+      const aimAngle = target
+        ? Phaser.Math.Angle.Between(px, py, target.x, target.y)
+        : this.player.rotation + PLAYER_FORWARD_ROTATION_OFFSET + side * 0.08;
+
+      this.spawnSupportProjectile(
+        px,
+        py,
+        aimAngle,
+        "pod_missile",
+        this.weaponStats.damage * (0.34 + podStacks * 0.09) * (superActive ? 1.24 : 1),
+        420 + podStacks * 35 + (superActive ? 90 : 0),
+        1200 + podStacks * 160,
+        0.35 + podStacks * 0.08 + (superActive ? 0.08 : 0),
+        22 + podStacks * 8,
+        0.25 + podStacks * 0.06
+      );
+      this.spawnMuzzleFlash(px, py, aimAngle, 0xffc59a, 0.72 + podStacks * 0.05);
+    }
+  }
+
   private updateWeapon(deltaMs: number): void {
     if (this.weaponCooldownMs > 0) {
       this.weaponCooldownMs -= deltaMs;
@@ -1053,31 +1423,37 @@ export class GameScene extends Phaser.Scene {
     const pellets = this.weaponStats.pellets;
     const fx = weaponFxProfile(sourceWeaponId);
     const stacks = this.getCoreUpgradeStacks();
+    const superStacks = this.getSuperWeaponStacks();
+    const superActive = this.isSuperActive();
     const baseAimAngle = this.player.rotation + PLAYER_FORWARD_ROTATION_OFFSET;
     const overdriveHeat = clamp(this.triggerHoldMs / 2200, 0, 1);
-    const holdRateMul = 1 + this.combatPerks.overdriveRateMul * overdriveHeat;
+    const holdRateMul = (1 + this.combatPerks.overdriveRateMul * overdriveHeat) * (superActive ? 1.28 + superStacks * 0.08 : 1);
+    const superDamageMul = superActive ? 1.45 + superStacks * 0.22 : 1;
     const dynamicSpreadMul = this.weapon.weaponId === "tempest_minigun" ? 1 + clamp(this.triggerHoldMs / 2400, 0, 1) * 0.28 : 1;
     const spreadBase = this.weaponStats.spreadDeg * dynamicSpreadMul;
-    const visualScaleMul = 1 + stacks.warhead * 0.08 + stacks.overcharge * 0.04;
-    const visualBodyMul = 1 + stacks.warhead * 0.06 + stacks.pierce * 0.03;
+    const visualScaleMul = (1 + stacks.warhead * 0.08 + stacks.overcharge * 0.04) * (superActive ? 1.24 : 1);
+    const visualBodyMul = (1 + stacks.warhead * 0.06 + stacks.pierce * 0.03) * (superActive ? 1.12 : 1);
     const visualTrailScale = fx.trailScale * (1 + stacks.guidance * 0.12 + stacks.arc * 0.08);
-    const visualTrailInterval = Math.max(12, fx.trailIntervalMs - stacks.guidance * 4 - stacks.pierce * 2);
-    const visualImpactScale = fx.impactScaleMul * (1 + stacks.warhead * 0.14 + stacks.arc * 0.08);
+    const visualTrailInterval = Math.max(10, fx.trailIntervalMs - stacks.guidance * 4 - stacks.pierce * 2 - (superActive ? 8 : 0));
+    const visualImpactScale = fx.impactScaleMul * (1 + stacks.warhead * 0.14 + stacks.arc * 0.08 + (superActive ? 0.2 : 0));
+    const bulletTexture = this.resolveBulletTextureKey(this.getBulletTextureKey(sourceWeaponId, stacks, superActive));
 
     const shotTint =
-      stacks.warhead >= Math.max(stacks.arc, stacks.guidance) && stacks.warhead > 0
+      superActive
+        ? 0xffefb0
+        : stacks.warhead >= Math.max(stacks.arc, stacks.guidance) && stacks.warhead > 0
         ? 0xffbe98
         : stacks.arc >= stacks.guidance && stacks.arc > 0
           ? 0xd2b6ff
           : stacks.guidance > 0
             ? 0xa3e3ff
             : fx.bulletTint;
-    const muzzleTint = overdriveHeat > 0.58 || stacks.overdrive > 0 ? 0xffd38d : shotTint;
-    const impactTint = stacks.warhead > 0 ? 0xffc8a3 : fx.impactTint;
-    const impactCritTint = stacks.arc > 0 ? 0xf2e5ff : fx.impactCritTint;
-    const muzzleScaleMul = fx.muzzleScaleMul * (1 + stacks.overdrive * 0.05 + overdriveHeat * 0.22);
+    const muzzleTint = superActive ? 0xffe3a2 : overdriveHeat > 0.58 || stacks.overdrive > 0 ? 0xffd38d : shotTint;
+    const impactTint = superActive ? 0xffe7b7 : stacks.warhead > 0 ? 0xffc8a3 : fx.impactTint;
+    const impactCritTint = superActive ? 0xfff7de : stacks.arc > 0 ? 0xf2e5ff : fx.impactCritTint;
+    const muzzleScaleMul = fx.muzzleScaleMul * (1 + stacks.overdrive * 0.05 + overdriveHeat * 0.22 + (superActive ? 0.35 : 0));
     const bulletBlendMode =
-      stacks.arc > 0 && fx.bulletBlendMode === Phaser.BlendModes.ADD ? Phaser.BlendModes.SCREEN : fx.bulletBlendMode;
+      superActive || (stacks.arc > 0 && fx.bulletBlendMode === Phaser.BlendModes.ADD) ? Phaser.BlendModes.SCREEN : fx.bulletBlendMode;
 
     for (let index = 0; index < pellets; index += 1) {
       const bullet = this.playerBullets.get(this.player.x, this.player.y, "tex_bullet") as Phaser.Physics.Arcade.Image | null;
@@ -1089,10 +1465,12 @@ export class GameScene extends Phaser.Scene {
       bullet.setActive(true).setVisible(true);
       bullet.body!.enable = true;
       bullet.setDepth(7);
+      bullet.setTexture(bulletTexture);
       bullet.setScale(PLAYER_BULLET_SCALE * fx.bulletScaleMul * visualScaleMul);
       bullet.setBlendMode(bulletBlendMode);
       bullet.clearTint();
       bullet.setTint(shotTint);
+      bullet.setAlpha(superActive ? 0.95 : 1);
       const body = bullet.body as Phaser.Physics.Arcade.Body;
       body.setSize(
         Math.round(PLAYER_BULLET_BODY_SIZE * fx.bulletBodyMul * visualBodyMul),
@@ -1129,8 +1507,8 @@ export class GameScene extends Phaser.Scene {
 
       this.bulletMeta.set(bullet, {
         lifeMs: (this.weaponStats.rangePx / this.weaponStats.projectileSpeed) * 1000,
-        damage: this.weaponStats.damage,
-        critChance: this.playerCritChance,
+        damage: this.weaponStats.damage * superDamageMul,
+        critChance: clamp(this.playerCritChance + (superActive ? 0.04 + superStacks * 0.01 : 0), 0, 0.95),
         critDamage: this.playerCritDamage,
         trailTickMs: randomRange(0, visualTrailInterval),
         trailIntervalMs: visualTrailInterval,
@@ -1144,17 +1522,21 @@ export class GameScene extends Phaser.Scene {
         splashDamageMul: this.combatPerks.splashDamageMul,
         homingStrength: this.combatPerks.homingStrength,
         homingTickMs: randomRange(0, 90),
-        knockback: 46 * this.combatPerks.knockbackMul,
-        chainChance: this.combatPerks.chainChance,
-        chainDamageMul: this.combatPerks.chainDamageMul,
+        knockback: 46 * this.combatPerks.knockbackMul * (superActive ? 1.25 : 1),
+        chainChance: clamp(this.combatPerks.chainChance + (superActive ? 0.12 : 0), 0, 0.85),
+        chainDamageMul: clamp(this.combatPerks.chainDamageMul + (superActive ? 0.16 : 0), 0, 1.2),
         isPlayerBullet: true,
         sourceWeaponId,
-        splitLeft: sourceWeaponId === "quantum_splitter" ? 1 + quantumSplitBonus : 0
+        splitLeft: sourceWeaponId === "quantum_splitter" ? 1 + quantumSplitBonus + (superActive ? 1 : 0) : 0
       });
     }
 
     if (sourceWeaponId === "sunlance_cannon") {
-      this.fireSunlanceBeam(baseAimAngle, this.weaponStats.damage * 0.68);
+      this.fireSunlanceBeam(baseAimAngle, this.weaponStats.damage * 0.68 * superDamageMul);
+    }
+
+    if (superActive && Math.random() < 0.45) {
+      this.cameras.main.shake(18, 0.0012);
     }
 
     this.weaponAmmo -= 1;
@@ -1663,13 +2045,16 @@ export class GameScene extends Phaser.Scene {
     }
 
     const fx = weaponFxProfile(sourceWeaponId);
+    const stacks = this.getCoreUpgradeStacks();
+    const superActive = this.isSuperActive();
     bullet.setActive(true).setVisible(true);
     bullet.body!.enable = true;
     bullet.setDepth(7);
-    bullet.setScale(PLAYER_BULLET_SCALE * fx.bulletScaleMul * 0.9);
+    bullet.setTexture(this.resolveBulletTextureKey(this.getBulletTextureKey(sourceWeaponId, stacks, superActive)));
+    bullet.setScale(PLAYER_BULLET_SCALE * fx.bulletScaleMul * (superActive ? 1.12 : 0.95));
     bullet.setBlendMode(fx.bulletBlendMode);
     bullet.clearTint();
-    bullet.setTint(fx.bulletTint);
+    bullet.setTint(superActive && sourceWeaponId !== "pod_missile" ? 0xffefb5 : fx.bulletTint);
     bullet.setRotation(angle - PLAYER_FORWARD_ROTATION_OFFSET);
     bullet.setPosition(x, y);
     bullet.setVelocity(Math.cos(angle) * speed, Math.sin(angle) * speed);
@@ -1680,16 +2065,16 @@ export class GameScene extends Phaser.Scene {
 
     this.bulletMeta.set(bullet, {
       lifeMs,
-      damage,
+      damage: damage * (superActive ? 1.15 : 1),
       critChance: baseMeta.critChance * 0.7,
       critDamage: baseMeta.critDamage,
       trailTickMs: randomRange(0, fx.trailIntervalMs),
-      trailIntervalMs: fx.trailIntervalMs,
+      trailIntervalMs: Math.max(12, fx.trailIntervalMs - (superActive ? 6 : 0)),
       trailTint: fx.trailTint,
-      trailScale: fx.trailScale * 0.9,
+      trailScale: fx.trailScale * (superActive ? 1.25 : 0.9),
       impactTint: fx.impactTint,
       impactCritTint: fx.impactCritTint,
-      impactScale: fx.impactScaleMul * 0.92,
+      impactScale: fx.impactScaleMul * (superActive ? 1.18 : 0.92),
       pierceLeft: Math.max(0, baseMeta.pierceLeft - 1),
       splashRadius: Math.max(0, baseMeta.splashRadius - 10),
       splashDamageMul: baseMeta.splashDamageMul * 0.72,
@@ -1984,6 +2369,10 @@ export class GameScene extends Phaser.Scene {
     this.disableBodyObject(enemy);
     this.kills += 1;
     gameState.saveData.stats.totalKills += 1;
+    if (killerMeta?.isPlayerBullet) {
+      const killCharge = meta.def.behavior === "charger" ? 20 : meta.def.behavior === "ranged" ? 13 : 10;
+      this.addSuperCharge(killCharge);
+    }
 
     this.spawnDrop(meta, ex, ey);
 
@@ -2120,6 +2509,57 @@ export class GameScene extends Phaser.Scene {
       ease: "Quad.Out",
       onComplete: () => trail.destroy()
     });
+
+    if (meta.sourceWeaponId === "pod_missile" || meta.sourceWeaponId === "seeker_launcher") {
+      const ember = this.add.image(bullet.x, bullet.y, "fx_muzzle");
+      ember.setDepth(6);
+      ember.setBlendMode(Phaser.BlendModes.ADD);
+      ember.setTint(0xffb784);
+      ember.setScale(meta.trailScale * randomRange(0.45, 0.7));
+      ember.setRotation(randomRange(0, Math.PI * 2));
+      ember.setAlpha(0.7);
+      this.tweens.add({
+        targets: ember,
+        alpha: 0,
+        scaleX: ember.scaleX * 1.7,
+        scaleY: ember.scaleY * 1.7,
+        duration: 140,
+        ease: "Quad.Out",
+        onComplete: () => ember.destroy()
+      });
+    } else if (meta.sourceWeaponId === "super_weapon") {
+      const sigil = this.add.image(bullet.x, bullet.y, "icon_up_super_weapon");
+      sigil.setDepth(7);
+      sigil.setBlendMode(Phaser.BlendModes.SCREEN);
+      sigil.setTint(0xffefb0);
+      sigil.setDisplaySize(meta.trailScale * 14, meta.trailScale * 14);
+      sigil.setAlpha(0.8);
+      this.tweens.add({
+        targets: sigil,
+        alpha: 0,
+        scaleX: 1.8,
+        scaleY: 1.8,
+        duration: 120,
+        ease: "Sine.Out",
+        onComplete: () => sigil.destroy()
+      });
+    } else if (this.isSuperActive() && meta.isPlayerBullet && Math.random() < 0.3) {
+      const flare = this.add.image(bullet.x, bullet.y, "fx_levelup");
+      flare.setDepth(6);
+      flare.setBlendMode(Phaser.BlendModes.ADD);
+      flare.setTint(0xfff2b4);
+      flare.setScale(meta.trailScale * 0.55);
+      flare.setAlpha(0.44);
+      this.tweens.add({
+        targets: flare,
+        alpha: 0,
+        scaleX: flare.scaleX * 1.6,
+        scaleY: flare.scaleY * 1.6,
+        duration: 110,
+        ease: "Quad.Out",
+        onComplete: () => flare.destroy()
+      });
+    }
   }
 
   private spawnMuzzleFlash(x: number, y: number, angle: number, tint = 0xffca7d, scaleMul = 1): void {
@@ -2556,6 +2996,7 @@ export class GameScene extends Phaser.Scene {
 
   private gainXp(amount: number): void {
     this.playerXp += amount;
+    this.addSuperCharge(Math.min(7, amount * 0.04));
 
     while (this.playerXp >= this.playerXpToNext) {
       this.playerXp -= this.playerXpToNext;
@@ -2577,7 +3018,9 @@ export class GameScene extends Phaser.Scene {
       item.id === "up_arc_chain" ||
       item.id === "up_overdrive" ||
       item.id === "up_close_quarters" ||
-      item.id === "up_overcharge_core"
+      item.id === "up_overcharge_core" ||
+      item.id === "up_missile_pod" ||
+      item.id === "up_super_weapon"
     );
     const defense = UPGRADE_DEFS.filter(item =>
       item.id === "up_hp" ||
@@ -2814,6 +3257,8 @@ export class GameScene extends Phaser.Scene {
       overdrive: this.getUpgradeStack("up_overdrive"),
       closeQuarters: this.getUpgradeStack("up_close_quarters"),
       overcharge: this.getUpgradeStack("up_overcharge_core"),
+      missilePod: this.getUpgradeStack("up_missile_pod"),
+      superWeapon: this.getUpgradeStack("up_super_weapon"),
       total: 0
     };
 
@@ -2824,12 +3269,22 @@ export class GameScene extends Phaser.Scene {
       stacks.guidance +
       stacks.overdrive +
       stacks.closeQuarters +
-      stacks.overcharge;
+      stacks.overcharge +
+      stacks.missilePod +
+      stacks.superWeapon;
 
     return stacks;
   }
 
   private getPrimaryAuraTint(stacks: CoreUpgradeStacks): number {
+    if (this.isSuperActive() || stacks.superWeapon > 0) {
+      return 0xffebb0;
+    }
+
+    if (stacks.missilePod > 0 && stacks.missilePod >= stacks.warhead) {
+      return 0xffc6a1;
+    }
+
     if (stacks.warhead >= stacks.arc && stacks.warhead >= stacks.guidance && stacks.warhead >= stacks.overdrive) {
       return 0xffb58f;
     }
@@ -2860,12 +3315,28 @@ export class GameScene extends Phaser.Scene {
     if (stacks.overdrive > 0) parts.push(`O${stacks.overdrive}`);
     if (stacks.closeQuarters > 0) parts.push(`C${stacks.closeQuarters}`);
     if (stacks.overcharge > 0) parts.push(`X${stacks.overcharge}`);
+    if (stacks.missilePod > 0) parts.push(`M${stacks.missilePod}`);
+    if (stacks.superWeapon > 0) parts.push(`S${stacks.superWeapon}`);
 
     if (parts.length === 0) {
       return "Perks -";
     }
 
     return `Perks ${parts.join("  ")}`;
+  }
+
+  private getSuperHudText(): string {
+    const superStacks = this.getSuperWeaponStacks();
+
+    if (superStacks <= 0) {
+      return "SUPER -";
+    }
+
+    if (this.isSuperActive()) {
+      return `SUPER ON ${(this.superActiveMs / 1000).toFixed(1)}s`;
+    }
+
+    return `SUPER ${Math.floor(this.superCharge)}%`;
   }
 
   private getActiveCoreUpgradeIds(stacks: CoreUpgradeStacks): string[] {
@@ -2878,6 +3349,8 @@ export class GameScene extends Phaser.Scene {
     if (stacks.overdrive > 0) ids.push("up_overdrive");
     if (stacks.closeQuarters > 0) ids.push("up_close_quarters");
     if (stacks.overcharge > 0) ids.push("up_overcharge_core");
+    if (stacks.missilePod > 0) ids.push("up_missile_pod");
+    if (stacks.superWeapon > 0) ids.push("up_super_weapon");
     if (stacks.total <= 0) ids.push("up_phase_barrier");
 
     return ids;
@@ -3009,6 +3482,8 @@ export class GameScene extends Phaser.Scene {
     const overdriveStacks = this.getUpgradeStack("up_overdrive");
     const closeQuarterStacks = this.getUpgradeStack("up_close_quarters");
     const overchargeStacks = this.getUpgradeStack("up_overcharge_core");
+    const missilePodStacks = this.getUpgradeStack("up_missile_pod");
+    const superWeaponStacks = this.getUpgradeStack("up_super_weapon");
 
     if (pierceStacks > 0) {
       perks.pierce += Math.min(4, pierceStacks);
@@ -3039,6 +3514,16 @@ export class GameScene extends Phaser.Scene {
     if (overchargeStacks > 0) {
       perks.chainDamageMul += overchargeStacks * 0.08;
       perks.splashDamageMul += overchargeStacks * 0.05;
+    }
+
+    if (missilePodStacks > 0) {
+      perks.homingStrength += missilePodStacks * 0.05;
+    }
+
+    if (superWeaponStacks > 0) {
+      perks.chainChance += superWeaponStacks * 0.04;
+      perks.chainDamageMul += superWeaponStacks * 0.05;
+      perks.overdriveRateMul += superWeaponStacks * 0.04;
     }
 
     perks.pierce = Math.round(clamp(perks.pierce, 0, 8));
@@ -3635,7 +4120,8 @@ export class GameScene extends Phaser.Scene {
       missionText: this.level.name,
       objectiveText: `Kills ${this.kills} / ${this.level.killTarget}`,
       creditsText: String(gameState.saveData.credits),
-      perkText: this.getPerkSummaryText()
+      perkText: this.getPerkSummaryText(),
+      superText: this.getSuperHudText()
     });
   }
 
@@ -3670,6 +4156,14 @@ export class GameScene extends Phaser.Scene {
 
     if (upgrade.healFlat) {
       this.playerHp = clamp(this.playerHp + upgrade.healFlat, 0, this.playerMaxHp);
+    }
+
+    if (upgrade.id === "up_missile_pod") {
+      this.supportMissileCooldownMs = 0;
+    }
+
+    if (upgrade.id === "up_super_weapon") {
+      this.superCharge = Math.max(this.superCharge, 35);
     }
 
     this.refreshDerivedStats();

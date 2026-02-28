@@ -538,6 +538,20 @@ export const UPGRADE_DEFS: UpgradeDef[] = [
       { stat: "projectileSpeedMul", value: 0.15 },
       { stat: "critChanceAdd", value: 0.03 }
     ]
+  },
+  {
+    id: "up_missile_pod",
+    name: "Missile Pod",
+    description: "Deploy support missile pods that auto-fire tracking rockets (stacking)",
+    weight: 5,
+    modifiers: []
+  },
+  {
+    id: "up_super_weapon",
+    name: "Overlimit Burst",
+    description: "Charge and trigger a timed super barrage mode",
+    weight: 4,
+    modifiers: []
   }
 ];
 

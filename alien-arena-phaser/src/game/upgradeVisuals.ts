@@ -70,6 +70,20 @@ const UPGRADE_VISUALS: Record<string, UpgradeVisual> = {
     cardBg: 0x3c3522,
     cardStroke: 0xfff0b0,
     chipLabel: "CORE"
+  },
+  up_missile_pod: {
+    iconKey: "icon_up_missile_pod",
+    tint: 0xffce9f,
+    cardBg: 0x392a22,
+    cardStroke: 0xffcda3,
+    chipLabel: "POD"
+  },
+  up_super_weapon: {
+    iconKey: "icon_up_super_weapon",
+    tint: 0xffefab,
+    cardBg: 0x42351f,
+    cardStroke: 0xffefb4,
+    chipLabel: "SUPER"
   }
 };
 
