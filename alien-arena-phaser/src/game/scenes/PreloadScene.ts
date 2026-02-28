@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 
 const ASSET_ROOT = "assets/game/kenney";
+const ICON_ROOT = "assets/game/icons/lucide";
 
 function generateCircleTexture(scene: Phaser.Scene, key: string, radius: number, color: number): void {
   const g = scene.add.graphics();
@@ -47,6 +48,16 @@ export class PreloadScene extends Phaser.Scene {
     this.load.image("fx_explosion_a", `${ASSET_ROOT}/effects/explosion_a.png`);
     this.load.image("fx_explosion_b", `${ASSET_ROOT}/effects/explosion_b.png`);
     this.load.image("fx_explosion_c", `${ASSET_ROOT}/effects/explosion_c.png`);
+
+    this.load.image("icon_up_pierce_rounds", `${ICON_ROOT}/crosshair.svg`);
+    this.load.image("icon_up_warhead", `${ICON_ROOT}/bomb.svg`);
+    this.load.image("icon_up_arc_chain", `${ICON_ROOT}/zap.svg`);
+    this.load.image("icon_up_guidance", `${ICON_ROOT}/navigation.svg`);
+    this.load.image("icon_up_overdrive", `${ICON_ROOT}/gauge.svg`);
+    this.load.image("icon_up_phase_barrier", `${ICON_ROOT}/shield.svg`);
+    this.load.image("icon_up_close_quarters", `${ICON_ROOT}/sword.svg`);
+    this.load.image("icon_up_overcharge_core", `${ICON_ROOT}/cpu.svg`);
+    this.load.image("icon_up_default", `${ICON_ROOT}/sparkles.svg`);
   }
 
   create(): void {
@@ -120,6 +131,42 @@ export class PreloadScene extends Phaser.Scene {
 
     if (!this.textures.exists("fx_explosion_c")) {
       generateCircleTexture(this, "fx_explosion_c", 7, 0xfff3aa);
+    }
+
+    if (!this.textures.exists("icon_up_pierce_rounds")) {
+      generateCircleTexture(this, "icon_up_pierce_rounds", 10, 0xdbeeff);
+    }
+
+    if (!this.textures.exists("icon_up_warhead")) {
+      generateCircleTexture(this, "icon_up_warhead", 10, 0xffbe94);
+    }
+
+    if (!this.textures.exists("icon_up_arc_chain")) {
+      generateCircleTexture(this, "icon_up_arc_chain", 10, 0xcfb7ff);
+    }
+
+    if (!this.textures.exists("icon_up_guidance")) {
+      generateCircleTexture(this, "icon_up_guidance", 10, 0xa9ddff);
+    }
+
+    if (!this.textures.exists("icon_up_overdrive")) {
+      generateCircleTexture(this, "icon_up_overdrive", 10, 0xffdf9c);
+    }
+
+    if (!this.textures.exists("icon_up_phase_barrier")) {
+      generateCircleTexture(this, "icon_up_phase_barrier", 10, 0x95f5ff);
+    }
+
+    if (!this.textures.exists("icon_up_close_quarters")) {
+      generateCircleTexture(this, "icon_up_close_quarters", 10, 0xffb1a0);
+    }
+
+    if (!this.textures.exists("icon_up_overcharge_core")) {
+      generateCircleTexture(this, "icon_up_overcharge_core", 10, 0xfff1b7);
+    }
+
+    if (!this.textures.exists("icon_up_default")) {
+      generateCircleTexture(this, "icon_up_default", 10, 0xc5e9ff);
     }
 
     this.scene.start("MainMenuScene");

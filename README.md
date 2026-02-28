@@ -151,3 +151,10 @@ window.__alienArenaQa.autoMove(true)
 window.__alienArenaQa.unstick()
 window.__alienArenaQa.events()
 ```
+
+## Asset Credits
+
+- Kenney Space Shooter Extension assets (`alien-arena/assets/game/kenney/...`) with included license files.
+- Lucide Icons (`alien-arena/assets/game/icons/lucide/...`) for upgrade UI/FX badges:
+  - Project: https://github.com/lucide-icons/lucide
+  - License: ISC (`alien-arena-phaser/public/assets/game/icons/lucide/LICENSE`)

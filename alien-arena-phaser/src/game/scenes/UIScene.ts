@@ -14,6 +14,7 @@ import {
   EVENT_SHOW_RESULT,
   EVENT_SHOW_UPGRADE
 } from "../events";
+import { getUpgradeVisual } from "../upgradeVisuals";
 
 interface HudPayload {
   hp: number;
@@ -248,8 +249,16 @@ export class UIScene extends Phaser.Scene {
       const option = options[index];
       const x = startX + index * 300;
       const y = this.scale.height * 0.5 + 10;
+      const visual = getUpgradeVisual(option.id);
 
-      const cardBg = this.add.rectangle(x, y, 270, 230, 0x1a315f, 0.98).setStrokeStyle(1, 0xa7c8ff, 0.8);
+      const cardBg = this.add.rectangle(x, y, 270, 230, visual.cardBg, 0.98).setStrokeStyle(1, visual.cardStroke, 0.88);
+      const iconBg = this.add.circle(x, y - 96, 26, 0x0b1934, 0.84).setStrokeStyle(1, visual.cardStroke, 0.9);
+      const icon = this.add.image(x, y - 96, visual.iconKey).setDisplaySize(26, 26).setTint(visual.tint).setAlpha(0.95);
+      const chip = this.add.text(x, y - 126, visual.chipLabel, {
+        fontFamily: "Arial Black",
+        fontSize: "12px",
+        color: "#e8f4ff"
+      }).setOrigin(0.5);
       const title = this.add.text(x, y - 78, option.name, {
         fontFamily: "Arial",
         fontSize: "24px",
@@ -268,7 +277,7 @@ export class UIScene extends Phaser.Scene {
         this.game.events.emit(EVENT_COMMAND_UPGRADE_PICK, option.id);
       });
 
-      this.upgradeCardContainer.add([cardBg, title, desc, btn]);
+      this.upgradeCardContainer.add([cardBg, iconBg, icon, chip, title, desc, btn]);
     }
 
     this.upgradeOverlay.setVisible(true);

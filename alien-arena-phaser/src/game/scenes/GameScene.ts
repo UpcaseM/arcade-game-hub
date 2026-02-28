@@ -43,6 +43,7 @@ import {
   EVENT_SHOW_UPGRADE,
   EVENT_TOAST
 } from "../events";
+import { getUpgradeVisual } from "../upgradeVisuals";
 
 type PauseReason = null | "pause" | "upgrade" | "inventory" | "craft" | "result";
 
@@ -2299,6 +2300,7 @@ export class GameScene extends Phaser.Scene {
 
   private spawnUpgradeApplyFx(upgrade: UpgradeDef): void {
     const id = upgrade.id;
+    const visual = getUpgradeVisual(id);
     let tint = 0x8ff5ff;
     let ringScale = 1.2;
     let sparkCount = 8;
@@ -2381,6 +2383,8 @@ export class GameScene extends Phaser.Scene {
       sparkDist = 112;
     }
 
+    tint = visual.tint || tint;
+
     const ring = this.add.image(this.player.x, this.player.y, "fx_levelup");
     ring.setDepth(9);
     ring.setBlendMode(Phaser.BlendModes.ADD);
@@ -2396,6 +2400,23 @@ export class GameScene extends Phaser.Scene {
       duration: 360,
       ease: "Cubic.Out",
       onComplete: () => ring.destroy()
+    });
+
+    const glyph = this.add.image(this.player.x, this.player.y, visual.iconKey);
+    glyph.setDepth(10);
+    glyph.setBlendMode(Phaser.BlendModes.ADD);
+    glyph.setTint(visual.tint);
+    glyph.setDisplaySize(28, 28);
+    glyph.setAlpha(0.95);
+
+    this.tweens.add({
+      targets: glyph,
+      alpha: 0,
+      scaleX: 1.65,
+      scaleY: 1.65,
+      duration: 240,
+      ease: "Quad.Out",
+      onComplete: () => glyph.destroy()
     });
 
     for (let i = 0; i < sparkCount; i += 1) {
@@ -2837,12 +2858,29 @@ export class GameScene extends Phaser.Scene {
     if (stacks.arc > 0) parts.push(`A${stacks.arc}`);
     if (stacks.guidance > 0) parts.push(`G${stacks.guidance}`);
     if (stacks.overdrive > 0) parts.push(`O${stacks.overdrive}`);
+    if (stacks.closeQuarters > 0) parts.push(`C${stacks.closeQuarters}`);
+    if (stacks.overcharge > 0) parts.push(`X${stacks.overcharge}`);
 
     if (parts.length === 0) {
       return "Perks -";
     }
 
     return `Perks ${parts.join("  ")}`;
+  }
+
+  private getActiveCoreUpgradeIds(stacks: CoreUpgradeStacks): string[] {
+    const ids: string[] = [];
+
+    if (stacks.pierce > 0) ids.push("up_pierce_rounds");
+    if (stacks.warhead > 0) ids.push("up_warhead");
+    if (stacks.arc > 0) ids.push("up_arc_chain");
+    if (stacks.guidance > 0) ids.push("up_guidance");
+    if (stacks.overdrive > 0) ids.push("up_overdrive");
+    if (stacks.closeQuarters > 0) ids.push("up_close_quarters");
+    if (stacks.overcharge > 0) ids.push("up_overcharge_core");
+    if (stacks.total <= 0) ids.push("up_phase_barrier");
+
+    return ids;
   }
 
   private updateUpgradeAuraFx(deltaMs: number): void {
@@ -2864,6 +2902,7 @@ export class GameScene extends Phaser.Scene {
 
     const tint = this.getPrimaryAuraTint(stacks);
     const radius = 26 + stacks.total * 3;
+    const activeUpgradeIds = this.getActiveCoreUpgradeIds(stacks);
 
     const ring = this.add.image(this.player.x, this.player.y, "fx_levelup");
     ring.setDepth(8);
@@ -2902,6 +2941,29 @@ export class GameScene extends Phaser.Scene {
         duration: randomInt(140, 260),
         ease: "Sine.Out",
         onComplete: () => spark.destroy()
+      });
+    }
+
+    if (activeUpgradeIds.length > 0) {
+      const pick = activeUpgradeIds[this.rng.int(0, activeUpgradeIds.length - 1)];
+      const visual = getUpgradeVisual(pick);
+      const icon = this.add.image(this.player.x, this.player.y, visual.iconKey);
+      icon.setDepth(9);
+      icon.setBlendMode(Phaser.BlendModes.ADD);
+      icon.setDisplaySize(16 + stacks.total * 1.6, 16 + stacks.total * 1.6);
+      icon.setTint(visual.tint);
+      icon.setAlpha(0.9);
+      const angle = randomRange(0, Math.PI * 2);
+      const targetR = radius + randomRange(10, 26);
+
+      this.tweens.add({
+        targets: icon,
+        x: this.player.x + Math.cos(angle) * targetR,
+        y: this.player.y + Math.sin(angle) * targetR,
+        alpha: 0,
+        duration: 260,
+        ease: "Sine.Out",
+        onComplete: () => icon.destroy()
       });
     }
   }
