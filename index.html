@@ -38,6 +38,13 @@
           <button type="button" data-open-game="color">Play Color Match</button>
         </article>
 
+        <article class="game-card animal-theme">
+          <span class="chip">Classic Strategy</span>
+          <h2>Dou Shou Qi</h2>
+          <p>Traditional Chinese animal chess. Capture higher ranks or use traps to win.</p>
+          <button type="button" data-open-game="dou-shou-qi">Play Dou Shou Qi</button>
+        </article>
+
         <article class="game-card alien-theme">
           <span class="chip">Top-Down Shooter</span>
           <h2>Alien Arena</h2>
@@ -122,6 +129,16 @@
       </section>
     </section>
 
+    <section id="douShouQiScreen" class="screen" aria-label="Dou Shou Qi game">
+      <div class="screen-header">
+        <button type="button" class="ghost-btn back-btn" data-back-to-menu>← Back to Hub</button>
+        <h2>Dou Shou Qi</h2>
+        <p>Traditional Chinese animal chess</p>
+      </div>
+
+      <div id="game-container" style="width: 1000px; height: 650px; margin: 0 auto;"></div>
+    </section>
+
     <section id="colorScreen" class="screen" aria-label="Color Match game">
       <div class="screen-header">
         <button type="button" class="ghost-btn back-btn" data-back-to-menu>← Back to Hub</button>
@@ -163,5 +180,6 @@
   </main>
 
   <script src="script.js" defer></script>
+  <script src="dou-shou-qi/dist/main.js" defer></script>
 </body>
 </html>

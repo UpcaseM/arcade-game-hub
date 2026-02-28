@@ -8,7 +8,8 @@ const screens = {
   menu: document.getElementById('menuScreen'),
   snake: document.getElementById('snakeScreen'),
   tap: document.getElementById('tapScreen'),
-  color: document.getElementById('colorScreen')
+  color: document.getElementById('colorScreen'),
+  douShouQi: document.getElementById('douShouQiScreen')
 };
 
 const gameButtons = document.querySelectorAll('[data-open-game]');
@@ -63,8 +64,15 @@ function showScreen(name) {
   nextScreen.classList.add('screen-active');
   currentScreen = name;
 
-  if (name === 'snake') {
-    resizeSnakeCanvas();
+  if (name === 'douShouQi') {
+    const gameContainer = document.getElementById('game-container');
+    if (gameContainer) {
+      gameContainer.innerHTML = ''; // Clear any existing content
+      const script = document.createElement('script');
+      script.src = 'dou-shou-qi/dist/main.js';
+      document.head.appendChild(script);
+    }
+  }
 
     if (snakeRunning && snakePaused && !snakeGameOver) {
       toggleSnakePause(false);
