@@ -340,6 +340,41 @@ export const ENEMY_DEFS: EnemyDef[] = [
     behavior: "charger",
     chargeCooldownMs: 3000,
     dropTableId: "elite"
+  },
+  {
+    id: "mini_boss_raider",
+    name: "Raider Captain",
+    hp: 520,
+    speed: 86,
+    contactDamage: 16,
+    rangedDamage: 14,
+    rangedCooldownMs: 1200,
+    expReward: 120,
+    behavior: "ranged",
+    dropTableId: "boss"
+  },
+  {
+    id: "mid_boss_behemoth",
+    name: "Behemoth Siege",
+    hp: 980,
+    speed: 74,
+    contactDamage: 28,
+    expReward: 220,
+    behavior: "charger",
+    chargeCooldownMs: 1900,
+    dropTableId: "boss"
+  },
+  {
+    id: "final_boss_overseer",
+    name: "Overseer Prime",
+    hp: 1800,
+    speed: 62,
+    contactDamage: 34,
+    rangedDamage: 20,
+    rangedCooldownMs: 850,
+    expReward: 420,
+    behavior: "ranged",
+    dropTableId: "boss"
   }
 ];
 
@@ -373,6 +408,19 @@ export const DROP_TABLES = {
       type: "attachment",
       weight: 18,
       attachmentPool: ["chip_vamp", "chip_focus", "optic_tracker", "stock_rush", "mag_quick"]
+    }
+  ],
+  boss: [
+    { type: "credits", weight: 85, min: 80, max: 180 },
+    { type: "material", materialId: "alloy", weight: 70, min: 3, max: 7 },
+    { type: "material", materialId: "core", weight: 52, min: 2, max: 4 },
+    { type: "material", materialId: "quantum", weight: 24, min: 1, max: 2 },
+    { type: "xp", weight: 100, min: 4, max: 6 },
+    { type: "weapon", weight: 40, weaponPool: ["void_blaster", "sunlance_cannon", "rail_lancer", "quantum_splitter"] },
+    {
+      type: "attachment",
+      weight: 32,
+      attachmentPool: ["chip_vamp", "chip_focus", "optic_tracker", "stock_rush", "mag_quick", "muzzle_overclock"]
     }
   ]
 } as const;
@@ -612,84 +660,110 @@ export const LEVEL_DEFS: LevelDef[] = [
   {
     id: "alpha_outpost",
     name: "Alpha Outpost",
-    description: "Scout mission on the frontier outpost.",
+    description: "Scout mission with multi-phase elite incursions.",
     mapKey: "arena_alpha",
     difficulty: 1,
+    endless: true,
     mapSize: { width: 2200, height: 1500 },
     durationSec: 90,
-    killTarget: 58,
+    killTarget: 68,
     waves: [
-      { enemyId: "crawler", count: 20, intervalMs: 1400, startAtMs: 0, spawnPattern: "edgeRandom" },
-      { enemyId: "swarmling", count: 16, intervalMs: 1600, startAtMs: 15000, spawnPattern: "edgeRandom" },
-      { enemyId: "crawler", count: 22, intervalMs: 1200, startAtMs: 32000, spawnPattern: "edgeRandom" }
+      { enemyId: "crawler", count: 18, intervalMs: 1350, startAtMs: 0, spawnPattern: "edgeRandom" },
+      { enemyId: "swarmling", count: 14, intervalMs: 1450, startAtMs: 9000, spawnPattern: "aroundPlayer" },
+      { enemyId: "spitter", count: 8, intervalMs: 2200, startAtMs: 18000, spawnPattern: "edgeRandom" },
+      { enemyId: "mini_boss_raider", count: 1, intervalMs: 9999, startAtMs: 28000, spawnPattern: "fixedPoints" },
+      { enemyId: "crawler", count: 20, intervalMs: 980, startAtMs: 32000, spawnPattern: "aroundPlayer" },
+      { enemyId: "mid_boss_behemoth", count: 1, intervalMs: 9999, startAtMs: 54000, spawnPattern: "aroundPlayer" },
+      { enemyId: "swarmling", count: 22, intervalMs: 760, startAtMs: 58000, spawnPattern: "aroundPlayer" },
+      { enemyId: "final_boss_overseer", count: 1, intervalMs: 9999, startAtMs: 76000, spawnPattern: "fixedPoints" }
     ],
     reward: { credits: 90, unlocks: ["beta_crater"] }
   },
   {
     id: "beta_crater",
     name: "Beta Crater",
-    description: "Unstable terrain with ranged mutants.",
+    description: "Crater storms with chained boss encounters.",
     mapKey: "arena_beta",
     difficulty: 2,
+    endless: true,
     mapSize: { width: 2400, height: 1700 },
     durationSec: 95,
-    killTarget: 76,
+    killTarget: 86,
     waves: [
-      { enemyId: "crawler", count: 24, intervalMs: 1200, startAtMs: 0, spawnPattern: "edgeRandom" },
-      { enemyId: "spitter", count: 12, intervalMs: 2300, startAtMs: 9000, spawnPattern: "edgeRandom" },
-      { enemyId: "swarmling", count: 26, intervalMs: 900, startAtMs: 26000, spawnPattern: "edgeRandom" },
-      { enemyId: "spitter", count: 13, intervalMs: 2100, startAtMs: 42000, spawnPattern: "edgeRandom" }
+      { enemyId: "crawler", count: 20, intervalMs: 1160, startAtMs: 0, spawnPattern: "edgeRandom" },
+      { enemyId: "spitter", count: 11, intervalMs: 1900, startAtMs: 7000, spawnPattern: "fixedPoints" },
+      { enemyId: "swarmling", count: 24, intervalMs: 820, startAtMs: 18000, spawnPattern: "aroundPlayer" },
+      { enemyId: "mini_boss_raider", count: 1, intervalMs: 9999, startAtMs: 25000, spawnPattern: "fixedPoints" },
+      { enemyId: "crusher", count: 6, intervalMs: 3600, startAtMs: 33000, spawnPattern: "edgeRandom" },
+      { enemyId: "mid_boss_behemoth", count: 1, intervalMs: 9999, startAtMs: 56000, spawnPattern: "aroundPlayer" },
+      { enemyId: "spitter", count: 14, intervalMs: 1350, startAtMs: 62000, spawnPattern: "aroundPlayer" },
+      { enemyId: "final_boss_overseer", count: 1, intervalMs: 9999, startAtMs: 82000, spawnPattern: "fixedPoints" }
     ],
     reward: { credits: 130, unlocks: ["gamma_relay"] }
   },
   {
     id: "gamma_relay",
     name: "Gamma Relay",
-    description: "Defend relay station from elite assaults.",
+    description: "Relay siege featuring roaming miniboss patrols.",
     mapKey: "arena_gamma",
     difficulty: 3,
+    endless: true,
     mapSize: { width: 2500, height: 1800 },
     durationSec: 100,
-    killTarget: 94,
+    killTarget: 104,
     waves: [
-      { enemyId: "crawler", count: 28, intervalMs: 1100, startAtMs: 0, spawnPattern: "edgeRandom" },
-      { enemyId: "spitter", count: 18, intervalMs: 1800, startAtMs: 10000, spawnPattern: "edgeRandom" },
-      { enemyId: "crusher", count: 8, intervalMs: 6000, startAtMs: 22000, spawnPattern: "edgeRandom" },
-      { enemyId: "swarmling", count: 34, intervalMs: 820, startAtMs: 42000, spawnPattern: "edgeRandom" }
+      { enemyId: "crawler", count: 24, intervalMs: 1020, startAtMs: 0, spawnPattern: "edgeRandom" },
+      { enemyId: "spitter", count: 16, intervalMs: 1560, startAtMs: 8000, spawnPattern: "fixedPoints" },
+      { enemyId: "mini_boss_raider", count: 1, intervalMs: 9999, startAtMs: 22000, spawnPattern: "aroundPlayer" },
+      { enemyId: "crusher", count: 9, intervalMs: 3200, startAtMs: 30000, spawnPattern: "edgeRandom" },
+      { enemyId: "swarmling", count: 34, intervalMs: 740, startAtMs: 36000, spawnPattern: "aroundPlayer" },
+      { enemyId: "mid_boss_behemoth", count: 1, intervalMs: 9999, startAtMs: 62000, spawnPattern: "aroundPlayer" },
+      { enemyId: "spitter", count: 18, intervalMs: 1240, startAtMs: 69000, spawnPattern: "aroundPlayer" },
+      { enemyId: "final_boss_overseer", count: 1, intervalMs: 9999, startAtMs: 88000, spawnPattern: "fixedPoints" }
     ],
     reward: { credits: 170, unlocks: ["delta_hive"] }
   },
   {
     id: "delta_hive",
     name: "Delta Hive",
-    description: "Dense hive activity. No safe corner.",
+    description: "Hive gauntlet with layered boss pressure.",
     mapKey: "arena_delta",
     difficulty: 4,
+    endless: true,
     mapSize: { width: 2700, height: 1900 },
     durationSec: 110,
-    killTarget: 126,
+    killTarget: 136,
     waves: [
-      { enemyId: "swarmling", count: 46, intervalMs: 680, startAtMs: 0, spawnPattern: "edgeRandom" },
-      { enemyId: "spitter", count: 21, intervalMs: 1500, startAtMs: 11000, spawnPattern: "edgeRandom" },
-      { enemyId: "crusher", count: 12, intervalMs: 4200, startAtMs: 22000, spawnPattern: "edgeRandom" },
-      { enemyId: "crawler", count: 44, intervalMs: 750, startAtMs: 42000, spawnPattern: "edgeRandom" }
+      { enemyId: "swarmling", count: 44, intervalMs: 620, startAtMs: 0, spawnPattern: "aroundPlayer" },
+      { enemyId: "spitter", count: 20, intervalMs: 1320, startAtMs: 9000, spawnPattern: "fixedPoints" },
+      { enemyId: "mini_boss_raider", count: 2, intervalMs: 14000, startAtMs: 20000, spawnPattern: "aroundPlayer" },
+      { enemyId: "crusher", count: 12, intervalMs: 2900, startAtMs: 32000, spawnPattern: "edgeRandom" },
+      { enemyId: "crawler", count: 42, intervalMs: 690, startAtMs: 42000, spawnPattern: "aroundPlayer" },
+      { enemyId: "mid_boss_behemoth", count: 1, intervalMs: 9999, startAtMs: 68000, spawnPattern: "fixedPoints" },
+      { enemyId: "swarmling", count: 30, intervalMs: 560, startAtMs: 74000, spawnPattern: "aroundPlayer" },
+      { enemyId: "final_boss_overseer", count: 1, intervalMs: 9999, startAtMs: 98000, spawnPattern: "fixedPoints" }
     ],
     reward: { credits: 240, unlocks: ["omega_gate"] }
   },
   {
     id: "omega_gate",
     name: "Omega Gate",
-    description: "Final breach. Survive impossible pressure.",
+    description: "Endless breach with triple boss chain and swarms.",
     mapKey: "arena_omega",
     difficulty: 5,
+    endless: true,
     mapSize: { width: 2900, height: 2000 },
     durationSec: 120,
-    killTarget: 156,
+    killTarget: 172,
     waves: [
-      { enemyId: "swarmling", count: 60, intervalMs: 580, startAtMs: 0, spawnPattern: "edgeRandom" },
-      { enemyId: "spitter", count: 28, intervalMs: 1200, startAtMs: 7000, spawnPattern: "edgeRandom" },
-      { enemyId: "crusher", count: 18, intervalMs: 3500, startAtMs: 20000, spawnPattern: "edgeRandom" },
-      { enemyId: "crawler", count: 56, intervalMs: 620, startAtMs: 42000, spawnPattern: "edgeRandom" }
+      { enemyId: "swarmling", count: 58, intervalMs: 520, startAtMs: 0, spawnPattern: "aroundPlayer" },
+      { enemyId: "spitter", count: 26, intervalMs: 1040, startAtMs: 6500, spawnPattern: "fixedPoints" },
+      { enemyId: "mini_boss_raider", count: 2, intervalMs: 15000, startAtMs: 18000, spawnPattern: "aroundPlayer" },
+      { enemyId: "crusher", count: 16, intervalMs: 2400, startAtMs: 29000, spawnPattern: "edgeRandom" },
+      { enemyId: "crawler", count: 52, intervalMs: 560, startAtMs: 42000, spawnPattern: "aroundPlayer" },
+      { enemyId: "mid_boss_behemoth", count: 1, intervalMs: 9999, startAtMs: 72000, spawnPattern: "fixedPoints" },
+      { enemyId: "spitter", count: 24, intervalMs: 920, startAtMs: 79000, spawnPattern: "aroundPlayer" },
+      { enemyId: "final_boss_overseer", count: 1, intervalMs: 9999, startAtMs: 102000, spawnPattern: "fixedPoints" }
     ],
     reward: { credits: 330 }
   }

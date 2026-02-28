@@ -76,11 +76,16 @@ type EnemyMeta = {
   def: EnemyDef;
   hp: number;
   maxHp: number;
+  baseTint: number | null;
+  bossTier: 0 | 1 | 2 | 3;
   attackCooldownMs: number;
+  specialCooldownMs: number;
+  burstShotsLeft: number;
   chargeCooldownMs: number;
   dashMs: number;
   dashX: number;
   dashY: number;
+  orbitDir: -1 | 1;
   hitFlashMs: number;
 };
 
@@ -169,12 +174,20 @@ const PLAYER_BULLET_SCALE = 0.68;
 const PLAYER_BULLET_BODY_SIZE = 8;
 const ENEMY_BULLET_SCALE = 0.72;
 const ENEMY_BULLET_BODY_SIZE = 8;
+const BOSS_TINTS: Record<string, number> = {
+  mini_boss_raider: 0xd4dfff,
+  mid_boss_behemoth: 0xffc39f,
+  final_boss_overseer: 0xffd6a1
+};
 
 const ENEMY_VISUALS: Record<string, EnemyVisualMeta> = {
   crawler: { key: "tex_enemy_crawler", scale: 0.62, bodySize: 32, hitFxScale: 0.5 },
   spitter: { key: "tex_enemy_spitter", scale: 0.62, bodySize: 32, hitFxScale: 0.52 },
   swarmling: { key: "tex_enemy_swarmling", scale: 0.52, bodySize: 24, hitFxScale: 0.4 },
-  crusher: { key: "tex_enemy_crusher", scale: 0.4, bodySize: 46, hitFxScale: 0.72 }
+  crusher: { key: "tex_enemy_crusher", scale: 0.4, bodySize: 46, hitFxScale: 0.72 },
+  mini_boss_raider: { key: "tex_enemy_spitter", scale: 0.84, bodySize: 52, hitFxScale: 1.08 },
+  mid_boss_behemoth: { key: "tex_enemy_crusher", scale: 0.62, bodySize: 68, hitFxScale: 1.35 },
+  final_boss_overseer: { key: "tex_enemy_crusher", scale: 0.78, bodySize: 78, hitFxScale: 1.58 }
 };
 
 const PICKUP_VISUALS: Record<PickupMeta["type"], PickupVisualMeta> = {
@@ -191,6 +204,22 @@ function pickupVisual(type: PickupMeta["type"]): PickupVisualMeta {
 
 function enemyVisual(enemyId: string): EnemyVisualMeta {
   return ENEMY_VISUALS[enemyId] || ENEMY_VISUALS.crawler;
+}
+
+function enemyBossTier(enemyId: string): 0 | 1 | 2 | 3 {
+  if (enemyId === "mini_boss_raider") {
+    return 1;
+  }
+
+  if (enemyId === "mid_boss_behemoth") {
+    return 2;
+  }
+
+  if (enemyId === "final_boss_overseer") {
+    return 3;
+  }
+
+  return 0;
 }
 
 function weaponFxProfile(weaponId: string): WeaponFxProfile {
@@ -523,6 +552,9 @@ export class GameScene extends Phaser.Scene {
   private superActiveMs = 0;
   private superFxPulseMs = 0;
   private superBarrageCooldownMs = 0;
+  private endlessThreatTier = 1;
+  private endlessNextSpawnAtMs = 0;
+  private endlessNextBossAtMs = 0;
 
   constructor() {
     super("GameScene");
@@ -596,6 +628,9 @@ export class GameScene extends Phaser.Scene {
     this.superActiveMs = 0;
     this.superFxPulseMs = 0;
     this.superBarrageCooldownMs = 0;
+    this.endlessThreatTier = 1;
+    this.endlessNextSpawnAtMs = 9000 + this.level.difficulty * 1200;
+    this.endlessNextBossAtMs = 46000 + this.level.difficulty * 2600;
 
     this.syncLoadout();
     this.refreshDerivedStats();
@@ -620,6 +655,52 @@ export class GameScene extends Phaser.Scene {
     this.input.once("pointerdown", () => {
       this.audio.ensureContext().then(() => this.audio.startBgm()).catch(() => {});
     });
+  }
+
+  private isEndlessLevel(): boolean {
+    return Boolean(this.level.endless);
+  }
+
+  private getWorldDelta(fromX: number, fromY: number, toX: number, toY: number): { dx: number; dy: number } {
+    let dx = toX - fromX;
+    let dy = toY - fromY;
+
+    if (!this.isEndlessLevel()) {
+      return { dx, dy };
+    }
+
+    const width = this.level.mapSize.width;
+    const height = this.level.mapSize.height;
+
+    if (Math.abs(dx) > width * 0.5) {
+      dx -= Math.sign(dx) * width;
+    }
+
+    if (Math.abs(dy) > height * 0.5) {
+      dy -= Math.sign(dy) * height;
+    }
+
+    return { dx, dy };
+  }
+
+  private getWorldDistanceSq(fromX: number, fromY: number, toX: number, toY: number): number {
+    const delta = this.getWorldDelta(fromX, fromY, toX, toY);
+    return delta.dx * delta.dx + delta.dy * delta.dy;
+  }
+
+  private wrapInWorld(obj: Phaser.Physics.Arcade.Image): void {
+    if (!this.isEndlessLevel()) {
+      return;
+    }
+
+    const width = this.level.mapSize.width;
+    const height = this.level.mapSize.height;
+    const wrappedX = Phaser.Math.Wrap(obj.x, 0, width);
+    const wrappedY = Phaser.Math.Wrap(obj.y, 0, height);
+
+    if (wrappedX !== obj.x || wrappedY !== obj.y) {
+      obj.setPosition(wrappedX, wrappedY);
+    }
   }
 
   private createArenaGrid(width: number, height: number): void {
@@ -647,8 +728,10 @@ export class GameScene extends Phaser.Scene {
     }
 
     g.strokePath();
-    g.lineStyle(2, 0x7498db, 0.38);
-    g.strokeRect(1, 1, width - 2, height - 2);
+    if (!this.isEndlessLevel()) {
+      g.lineStyle(2, 0x7498db, 0.38);
+      g.strokeRect(1, 1, width - 2, height - 2);
+    }
   }
 
   private createGroups(): void {
@@ -681,7 +764,7 @@ export class GameScene extends Phaser.Scene {
     this.player = this.physics.add.image(x, y, "tex_player");
     this.player.setScale(PLAYER_SCALE);
     this.player.setDepth(6);
-    this.player.setCollideWorldBounds(true);
+    this.player.setCollideWorldBounds(!this.isEndlessLevel());
     this.player.setDamping(false);
     this.player.setDrag(0, 0);
     this.player.setMaxVelocity(320, 320);
@@ -952,6 +1035,94 @@ export class GameScene extends Phaser.Scene {
       const event = events[index];
       this.spawnEnemy(event.enemyId, event.spawnPattern);
     }
+
+    this.processEndlessDirector();
+  }
+
+  private processEndlessDirector(): void {
+    if (!this.isEndlessLevel()) {
+      return;
+    }
+
+    const nextTier = 1 + Math.floor(this.elapsedMs / 30000);
+
+    if (nextTier > this.endlessThreatTier) {
+      this.endlessThreatTier = nextTier;
+      this.game.events.emit(EVENT_TOAST, `Threat level ${this.endlessThreatTier}`);
+    }
+
+    while (this.elapsedMs >= this.endlessNextSpawnAtMs) {
+      this.spawnEndlessPack();
+      const cadence = clamp(7600 - this.endlessThreatTier * 420, 2400, 7600);
+      this.endlessNextSpawnAtMs += cadence;
+    }
+
+    while (this.elapsedMs >= this.endlessNextBossAtMs) {
+      this.spawnEndlessBossWave();
+      const cadence = clamp(68000 - this.endlessThreatTier * 2200, 32000, 68000);
+      this.endlessNextBossAtMs += cadence;
+    }
+  }
+
+  private spawnEndlessPack(): void {
+    const threat = this.endlessThreatTier + this.level.difficulty;
+    const spawnCount = Math.round(clamp(3 + Math.floor(threat / 2), 3, 11));
+
+    for (let index = 0; index < spawnCount; index += 1) {
+      const roll = Math.random();
+      const enemyId =
+        threat >= 7 && roll > 0.88
+          ? "crusher"
+          : roll > 0.62
+            ? "spitter"
+            : roll > 0.3
+              ? "crawler"
+              : "swarmling";
+      const pattern = roll > 0.75 ? "fixedPoints" : roll > 0.25 ? "aroundPlayer" : "edgeRandom";
+      this.spawnEnemy(enemyId, pattern);
+    }
+
+    if (threat >= 6 && Math.random() < 0.18) {
+      this.spawnEnemy("mini_boss_raider", "aroundPlayer");
+    }
+  }
+
+  private countAliveEnemy(enemyId: string): number {
+    const enemies = this.enemies.getChildren() as Phaser.Physics.Arcade.Image[];
+    let count = 0;
+
+    for (let index = 0; index < enemies.length; index += 1) {
+      const enemy = enemies[index];
+
+      if (!enemy.active) {
+        continue;
+      }
+
+      const meta = this.enemyMeta.get(enemy);
+
+      if (meta?.def.id === enemyId) {
+        count += 1;
+      }
+    }
+
+    return count;
+  }
+
+  private spawnEndlessBossWave(): void {
+    const threat = this.endlessThreatTier + this.level.difficulty;
+
+    if (this.countAliveEnemy("final_boss_overseer") > 0) {
+      return;
+    }
+
+    const bossId = threat >= 9 ? "final_boss_overseer" : threat >= 6 ? "mid_boss_behemoth" : "mini_boss_raider";
+    this.spawnEnemy(bossId, "fixedPoints");
+
+    const escortCount = bossId === "final_boss_overseer" ? 7 : bossId === "mid_boss_behemoth" ? 5 : 3;
+
+    for (let index = 0; index < escortCount; index += 1) {
+      this.spawnEnemy(index % 2 === 0 ? "swarmling" : "spitter", "aroundPlayer");
+    }
   }
 
   private spawnEnemy(enemyId: string, pattern: "edgeRandom" | "aroundPlayer" | "fixedPoints"): void {
@@ -979,31 +1150,97 @@ export class GameScene extends Phaser.Scene {
     body.setSize(visual.bodySize, visual.bodySize, true);
 
     const hp = def.hp * (1 + this.level.difficulty * 0.08);
+    const bossTier = enemyBossTier(def.id);
+    const baseTint = BOSS_TINTS[def.id] ?? null;
+    const orbitDir = Math.random() < 0.5 ? -1 : 1;
 
     this.enemyMeta.set(enemy, {
       def,
       hp,
       maxHp: hp,
+      baseTint,
+      bossTier,
       attackCooldownMs: def.rangedCooldownMs || 0,
+      specialCooldownMs: bossTier === 3 ? 3300 : bossTier === 2 ? 3000 : bossTier === 1 ? 2600 : 0,
+      burstShotsLeft: 0,
       chargeCooldownMs: def.chargeCooldownMs || 0,
       dashMs: 0,
       dashX: 0,
       dashY: 0,
+      orbitDir,
       hitFlashMs: 0
     });
+
+    if (bossTier > 0) {
+      enemy.setDepth(5);
+      if (baseTint !== null) {
+        enemy.setTint(baseTint);
+      }
+      this.game.events.emit(EVENT_TOAST, `BOSS ALERT: ${def.name}`);
+    }
   }
 
   private getSpawnPoint(pattern: "edgeRandom" | "aroundPlayer" | "fixedPoints") {
     const width = this.level.mapSize.width;
     const height = this.level.mapSize.height;
     const margin = 30;
+    const endless = this.isEndlessLevel();
 
     if (pattern === "aroundPlayer") {
       const angle = randomRange(0, Math.PI * 2);
       const distance = randomRange(420, 720);
+
+      if (endless) {
+        return {
+          x: Phaser.Math.Wrap(this.player.x + Math.cos(angle) * distance, 0, width),
+          y: Phaser.Math.Wrap(this.player.y + Math.sin(angle) * distance, 0, height)
+        };
+      }
+
       return {
         x: clamp(this.player.x + Math.cos(angle) * distance, margin, width - margin),
         y: clamp(this.player.y + Math.sin(angle) * distance, margin, height - margin)
+      };
+    }
+
+    if (pattern === "fixedPoints") {
+      if (endless) {
+        const points = [
+          { x: -620, y: 0 },
+          { x: 620, y: 0 },
+          { x: 0, y: -520 },
+          { x: 0, y: 520 },
+          { x: -480, y: -380 },
+          { x: 480, y: -380 },
+          { x: -480, y: 380 },
+          { x: 480, y: 380 }
+        ];
+        const pick = points[randomInt(0, points.length - 1)];
+        return {
+          x: Phaser.Math.Wrap(this.player.x + pick.x, 0, width),
+          y: Phaser.Math.Wrap(this.player.y + pick.y, 0, height)
+        };
+      }
+
+      const points = [
+        { x: width * 0.5, y: margin + 40 },
+        { x: width * 0.5, y: height - (margin + 40) },
+        { x: margin + 40, y: height * 0.5 },
+        { x: width - (margin + 40), y: height * 0.5 },
+        { x: width * 0.25, y: height * 0.25 },
+        { x: width * 0.75, y: height * 0.25 },
+        { x: width * 0.25, y: height * 0.75 },
+        { x: width * 0.75, y: height * 0.75 }
+      ];
+      return points[randomInt(0, points.length - 1)];
+    }
+
+    if (endless) {
+      const angle = randomRange(0, Math.PI * 2);
+      const distance = randomRange(760, 980);
+      return {
+        x: Phaser.Math.Wrap(this.player.x + Math.cos(angle) * distance, 0, width),
+        y: Phaser.Math.Wrap(this.player.y + Math.sin(angle) * distance, 0, height)
       };
     }
 
@@ -1044,11 +1281,18 @@ export class GameScene extends Phaser.Scene {
     const height = this.level.mapSize.height;
     const dt = deltaMs / 1000;
     const speed = this.playerMoveSpeed;
+    const endless = this.isEndlessLevel();
 
     if (len > 0.001) {
       const nextX = this.player.x + moveX * speed * dt;
       const nextY = this.player.y + moveY * speed * dt;
-      this.player.setPosition(clamp(nextX, 20, width - 20), clamp(nextY, 20, height - 20));
+      if (endless) {
+        const wrappedX = Phaser.Math.Wrap(nextX, 0, width);
+        const wrappedY = Phaser.Math.Wrap(nextY, 0, height);
+        this.player.setPosition(wrappedX, wrappedY);
+      } else {
+        this.player.setPosition(clamp(nextX, 20, width - 20), clamp(nextY, 20, height - 20));
+      }
       this.player.setVelocity(moveX * speed, moveY * speed);
     } else {
       this.player.setVelocity(0, 0);
@@ -1217,7 +1461,7 @@ export class GameScene extends Phaser.Scene {
         continue;
       }
 
-      const sq = distSq(x, y, enemy.x, enemy.y);
+      const sq = this.getWorldDistanceSq(x, y, enemy.x, enemy.y);
 
       if (sq > maxRangeSq) {
         continue;
@@ -1321,7 +1565,8 @@ export class GameScene extends Phaser.Scene {
     } else {
       for (let index = 0; index < targets.length; index += 1) {
         const target = targets[index];
-        const angle = Phaser.Math.Angle.Between(this.player.x, this.player.y, target.x, target.y);
+        const delta = this.getWorldDelta(this.player.x, this.player.y, target.x, target.y);
+        const angle = Math.atan2(delta.dy, delta.dx);
         const spread = randomRange(-0.08, 0.08);
         this.spawnSupportProjectile(
           this.player.x + Math.cos(angle) * 12,
@@ -1366,9 +1611,11 @@ export class GameScene extends Phaser.Scene {
       const px = this.player.x + side * (20 + row * 16);
       const py = this.player.y + (row === 0 ? 12 : -12);
       const target = this.findNearestEnemy(px, py, 960);
-      const aimAngle = target
-        ? Phaser.Math.Angle.Between(px, py, target.x, target.y)
-        : this.player.rotation + PLAYER_FORWARD_ROTATION_OFFSET + side * 0.08;
+      let aimAngle = this.player.rotation + PLAYER_FORWARD_ROTATION_OFFSET + side * 0.08;
+      if (target) {
+        const delta = this.getWorldDelta(px, py, target.x, target.y);
+        aimAngle = Math.atan2(delta.dy, delta.dx);
+      }
 
       this.spawnSupportProjectile(
         px,
@@ -1565,9 +1812,13 @@ export class GameScene extends Phaser.Scene {
       this.updatePlayerBulletSteering(bullet, meta, deltaMs);
       this.updateBulletTrailFx(bullet, meta, deltaMs);
 
-      if (this.isOutsideWorld(bullet.x, bullet.y, 72)) {
-        this.disableBodyObject(bullet);
-        continue;
+      if (this.isEndlessLevel()) {
+        this.wrapInWorld(bullet);
+      } else {
+        if (this.isOutsideWorld(bullet.x, bullet.y, 72)) {
+          this.disableBodyObject(bullet);
+          continue;
+        }
       }
 
       if (meta.lifeMs <= 0) {
@@ -1594,9 +1845,13 @@ export class GameScene extends Phaser.Scene {
       meta.lifeMs -= deltaMs;
       this.updateBulletTrailFx(bullet, meta, deltaMs);
 
-      if (this.isOutsideWorld(bullet.x, bullet.y, 72)) {
-        this.disableBodyObject(bullet);
-        continue;
+      if (this.isEndlessLevel()) {
+        this.wrapInWorld(bullet);
+      } else {
+        if (this.isOutsideWorld(bullet.x, bullet.y, 72)) {
+          this.disableBodyObject(bullet);
+          continue;
+        }
       }
 
       if (meta.lifeMs <= 0) {
@@ -1626,7 +1881,8 @@ export class GameScene extends Phaser.Scene {
 
     const body = bullet.body as Phaser.Physics.Arcade.Body;
     const speed = Math.max(180, body.speed || this.weaponStats.projectileSpeed);
-    const desiredAngle = Phaser.Math.Angle.Between(bullet.x, bullet.y, target.x, target.y);
+    const delta = this.getWorldDelta(bullet.x, bullet.y, target.x, target.y);
+    const desiredAngle = Math.atan2(delta.dy, delta.dx);
     const currentAngle = Math.atan2(body.velocity.y, body.velocity.x);
     const turn = clamp(meta.homingStrength * 0.5, 0.04, 0.36);
     const nextAngle = Phaser.Math.Angle.RotateTo(currentAngle, desiredAngle, turn);
@@ -1648,7 +1904,7 @@ export class GameScene extends Phaser.Scene {
         continue;
       }
 
-      const sq = distSq(x, y, enemy.x, enemy.y);
+      const sq = this.getWorldDistanceSq(x, y, enemy.x, enemy.y);
 
       if (sq >= bestSq) {
         continue;
@@ -1699,78 +1955,324 @@ export class GameScene extends Phaser.Scene {
         continue;
       }
 
-      if (stride > 1 && index % stride !== this.enemyUpdateTick) {
-        if (meta.hitFlashMs > 0) {
-          meta.hitFlashMs -= deltaMs;
-          enemy.setTint(0xffe28d);
-        } else {
-          enemy.clearTint();
-        }
+      if (stride > 1 && meta.bossTier <= 0 && index % stride !== this.enemyUpdateTick) {
+        this.updateEnemyTint(enemy, meta, deltaMs);
         continue;
       }
 
-      const dx = this.player.x - enemy.x;
-      const dy = this.player.y - enemy.y;
+      const toPlayer = this.getWorldDelta(enemy.x, enemy.y, this.player.x, this.player.y);
+      const dx = toPlayer.dx;
+      const dy = toPlayer.dy;
       const distance = Math.hypot(dx, dy) || 0.001;
       let dirX = dx / distance;
       let dirY = dy / distance;
       let speedMul = 1;
+      const playerAngle = Math.atan2(dy, dx);
 
-      if (meta.def.behavior === "ranged") {
-        if (distance < 220) {
-          dirX = -dirX;
-          dirY = -dirY;
-        } else if (distance < 320) {
-          dirX = 0;
-          dirY = 0;
+      if (meta.bossTier > 0) {
+        const bossMove = this.updateBossBehavior(enemy, meta, deltaMs, playerAngle, distance, dirX, dirY);
+        dirX = bossMove.dirX;
+        dirY = bossMove.dirY;
+        speedMul = bossMove.speedMul;
+      } else {
+        if (meta.def.behavior === "ranged") {
+          if (distance < 220) {
+            dirX = -dirX;
+            dirY = -dirY;
+          } else if (distance < 320) {
+            dirX = 0;
+            dirY = 0;
+          }
+
+          meta.attackCooldownMs -= deltaMs;
+
+          if (meta.attackCooldownMs <= 0 && distance < 620) {
+            meta.attackCooldownMs = meta.def.rangedCooldownMs || 1800;
+            this.spawnEnemyBullet(enemy.x, enemy.y, playerAngle, meta.def.rangedDamage || 10);
+          }
         }
 
-        meta.attackCooldownMs -= deltaMs;
+        if (meta.def.behavior === "charger") {
+          meta.chargeCooldownMs -= deltaMs;
 
-        if (meta.attackCooldownMs <= 0 && distance < 620) {
-          meta.attackCooldownMs = meta.def.rangedCooldownMs || 1800;
-          this.spawnEnemyBullet(enemy.x, enemy.y, Math.atan2(dy, dx), meta.def.rangedDamage || 10);
+          if (meta.dashMs > 0) {
+            meta.dashMs -= deltaMs;
+            dirX = meta.dashX;
+            dirY = meta.dashY;
+            speedMul = 2.7;
+          } else if (meta.chargeCooldownMs <= 0 && distance < 560) {
+            meta.chargeCooldownMs = meta.def.chargeCooldownMs || 2800;
+            meta.dashMs = 430;
+            meta.dashX = dirX;
+            meta.dashY = dirY;
+          }
         }
-      }
 
-      if (meta.def.behavior === "charger") {
-        meta.chargeCooldownMs -= deltaMs;
-
-        if (meta.dashMs > 0) {
-          meta.dashMs -= deltaMs;
-          dirX = meta.dashX;
-          dirY = meta.dashY;
-          speedMul = 2.7;
-        } else if (meta.chargeCooldownMs <= 0 && distance < 560) {
-          meta.chargeCooldownMs = meta.def.chargeCooldownMs || 2800;
-          meta.dashMs = 430;
-          meta.dashX = dirX;
-          meta.dashY = dirY;
+        if (meta.def.behavior === "swarm") {
+          speedMul = 1.15;
         }
-      }
-
-      if (meta.def.behavior === "swarm") {
-        speedMul = 1.15;
       }
 
       const speed = meta.def.speed * speedMul;
       enemy.setVelocity(dirX * speed, dirY * speed);
       const facing = Math.atan2(dirY, dirX) - PLAYER_FORWARD_ROTATION_OFFSET;
       enemy.rotation = smoothAngle(enemy.rotation, facing, 0.16);
+      this.wrapInWorld(enemy);
 
-      if (meta.hitFlashMs > 0) {
-        meta.hitFlashMs -= deltaMs;
-        enemy.setTint(0xffe28d);
-      } else {
-        enemy.clearTint();
-      }
+      this.updateEnemyTint(enemy, meta, deltaMs);
 
-      const contactRadius = 14 + enemyVisual(meta.def.id).bodySize * 0.44;
+      const contactRadius = 14 + enemyVisual(meta.def.id).bodySize * (meta.bossTier > 0 ? 0.52 : 0.44);
 
       if (distance <= contactRadius) {
         this.damagePlayer(meta.def.contactDamage, meta.def.name);
       }
     }
+  }
+
+  private updateEnemyTint(enemy: Phaser.Physics.Arcade.Image, meta: EnemyMeta, deltaMs: number): void {
+    if (meta.hitFlashMs > 0) {
+      meta.hitFlashMs -= deltaMs;
+      enemy.setTint(0xffe28d);
+      return;
+    }
+
+    if (meta.baseTint !== null) {
+      enemy.setTint(meta.baseTint);
+      return;
+    }
+
+    enemy.clearTint();
+  }
+
+  private updateBossBehavior(
+    enemy: Phaser.Physics.Arcade.Image,
+    meta: EnemyMeta,
+    deltaMs: number,
+    playerAngle: number,
+    distance: number,
+    dirX: number,
+    dirY: number
+  ): { dirX: number; dirY: number; speedMul: number } {
+    if (meta.def.id === "mini_boss_raider") {
+      return this.updateMiniBossBehavior(enemy, meta, deltaMs, playerAngle, distance, dirX, dirY);
+    }
+
+    if (meta.def.id === "mid_boss_behemoth") {
+      return this.updateMidBossBehavior(enemy, meta, deltaMs, playerAngle, distance, dirX, dirY);
+    }
+
+    return this.updateFinalBossBehavior(enemy, meta, deltaMs, playerAngle, distance, dirX, dirY);
+  }
+
+  private updateMiniBossBehavior(
+    enemy: Phaser.Physics.Arcade.Image,
+    meta: EnemyMeta,
+    deltaMs: number,
+    playerAngle: number,
+    distance: number,
+    dirX: number,
+    dirY: number
+  ): { dirX: number; dirY: number; speedMul: number } {
+    const hpRatio = clamp(meta.hp / Math.max(1, meta.maxHp), 0, 1);
+    const rage = 1 - hpRatio;
+    let moveX = dirX;
+    let moveY = dirY;
+    let speedMul = 1.06 + rage * 0.2;
+
+    if (distance < 240) {
+      moveX = -dirX;
+      moveY = -dirY;
+      speedMul = 1.2 + rage * 0.24;
+    } else if (distance < 500) {
+      moveX = -dirY * meta.orbitDir;
+      moveY = dirX * meta.orbitDir;
+      speedMul = 1.12 + rage * 0.18;
+    }
+
+    meta.attackCooldownMs -= deltaMs;
+    meta.specialCooldownMs -= deltaMs;
+
+    if (meta.attackCooldownMs <= 0 && distance < 840) {
+      meta.attackCooldownMs = Math.max(440, (meta.def.rangedCooldownMs || 1100) - rage * 280);
+      const fanShots = rage > 0.55 ? 5 : 3;
+      const spread = fanShots === 5 ? 0.24 : 0.16;
+      const damage = (meta.def.rangedDamage || 14) * (0.9 + rage * 0.3);
+      for (let shot = 0; shot < fanShots; shot += 1) {
+        const lane = shot - (fanShots - 1) * 0.5;
+        const angle = playerAngle + lane * spread;
+        this.spawnEnemyBullet(enemy.x, enemy.y, angle, damage, {
+          speed: 380 + rage * 120,
+          scaleMul: 0.95,
+          tint: 0xbdd9ff,
+          trailTint: 0xa5cdff,
+          impactTint: 0xd1e6ff,
+          impactCritTint: 0xecf4ff
+        });
+      }
+    }
+
+    if (meta.specialCooldownMs <= 0 && distance < 960) {
+      meta.specialCooldownMs = Math.max(3600, 5200 - rage * 1200);
+      const ringShots = 10 + Math.floor(rage * 4);
+      const offset = randomRange(0, Math.PI * 2);
+      for (let shot = 0; shot < ringShots; shot += 1) {
+        const angle = offset + (Math.PI * 2 * shot) / ringShots;
+        this.spawnEnemyBullet(enemy.x, enemy.y, angle, (meta.def.rangedDamage || 14) * 0.72, {
+          speed: 300 + rage * 90,
+          scaleMul: 0.82,
+          tint: 0xa8cbff,
+          trailTint: 0x98c2ff,
+          impactTint: 0xcce2ff
+        });
+      }
+      meta.orbitDir = (meta.orbitDir * -1) as -1 | 1;
+      this.spawnHitFx(enemy.x, enemy.y, 1.12, false, 0xbdd7ff);
+    }
+
+    return { dirX: moveX, dirY: moveY, speedMul };
+  }
+
+  private updateMidBossBehavior(
+    enemy: Phaser.Physics.Arcade.Image,
+    meta: EnemyMeta,
+    deltaMs: number,
+    playerAngle: number,
+    distance: number,
+    dirX: number,
+    dirY: number
+  ): { dirX: number; dirY: number; speedMul: number } {
+    const hpRatio = clamp(meta.hp / Math.max(1, meta.maxHp), 0, 1);
+    const rage = 1 - hpRatio;
+    let moveX = dirX;
+    let moveY = dirY;
+    let speedMul = 1 + rage * 0.15;
+
+    meta.chargeCooldownMs -= deltaMs;
+    meta.specialCooldownMs -= deltaMs;
+
+    if (meta.dashMs > 0) {
+      meta.dashMs -= deltaMs;
+      moveX = meta.dashX;
+      moveY = meta.dashY;
+      speedMul = 2.8 + rage * 0.7;
+    } else {
+      if (distance < 170) {
+        moveX = -dirX;
+        moveY = -dirY;
+        speedMul = 1.1;
+      } else if (distance < 320) {
+        moveX = -dirY * meta.orbitDir;
+        moveY = dirX * meta.orbitDir;
+        speedMul = 0.85;
+      }
+
+      if (meta.chargeCooldownMs <= 0 && distance < 780) {
+        meta.chargeCooldownMs = Math.max(1050, (meta.def.chargeCooldownMs || 2200) - rage * 620);
+        meta.dashMs = 520 + rage * 180;
+        meta.dashX = dirX;
+        meta.dashY = dirY;
+        this.spawnHitFx(enemy.x, enemy.y, 1.42, true, 0xffc7a5);
+      }
+    }
+
+    if (meta.specialCooldownMs <= 0) {
+      meta.specialCooldownMs = Math.max(2800, 4700 - rage * 1000);
+      const shots = 9 + Math.floor(rage * 5);
+      const base = randomRange(0, Math.PI * 2);
+      const damage = (meta.def.contactDamage || 24) * 0.6;
+      for (let shot = 0; shot < shots; shot += 1) {
+        const angle = base + (Math.PI * 2 * shot) / shots;
+        this.spawnEnemyBullet(enemy.x, enemy.y, angle, damage, {
+          speed: 350 + rage * 120,
+          scaleMul: 1.02,
+          tint: 0xffbd93,
+          trailTint: 0xffae87,
+          impactTint: 0xffd1b6
+        });
+      }
+    }
+
+    return { dirX: moveX, dirY: moveY, speedMul };
+  }
+
+  private updateFinalBossBehavior(
+    enemy: Phaser.Physics.Arcade.Image,
+    meta: EnemyMeta,
+    deltaMs: number,
+    playerAngle: number,
+    distance: number,
+    dirX: number,
+    dirY: number
+  ): { dirX: number; dirY: number; speedMul: number } {
+    const hpRatio = clamp(meta.hp / Math.max(1, meta.maxHp), 0, 1);
+    const rage = 1 - hpRatio;
+    let moveX = dirX;
+    let moveY = dirY;
+    let speedMul = 0.92 + rage * 0.34;
+
+    if (distance < 320) {
+      moveX = -dirX;
+      moveY = -dirY;
+      speedMul = 1.2 + rage * 0.18;
+    } else if (distance < 620) {
+      moveX = -dirY * meta.orbitDir;
+      moveY = dirX * meta.orbitDir;
+      speedMul = 1.03 + rage * 0.2;
+    }
+
+    meta.attackCooldownMs -= deltaMs;
+    meta.specialCooldownMs -= deltaMs;
+
+    if (meta.burstShotsLeft > 0) {
+      if (meta.attackCooldownMs <= 0) {
+        meta.attackCooldownMs = Math.max(110, 200 - rage * 70);
+        meta.burstShotsLeft -= 1;
+        const lanes = 5 + Math.floor(rage * 2);
+        const spread = 0.17 + rage * 0.1;
+        const damage = (meta.def.rangedDamage || 20) * (0.92 + rage * 0.32);
+        for (let lane = 0; lane < lanes; lane += 1) {
+          const offset = lane - (lanes - 1) * 0.5;
+          const angle = playerAngle + offset * spread;
+          this.spawnEnemyBullet(enemy.x, enemy.y, angle, damage, {
+            speed: 460 + rage * 140,
+            scaleMul: 1.12,
+            tint: 0xffddb3,
+            trailTint: 0xffd2a2,
+            impactTint: 0xffe4c6,
+            impactCritTint: 0xfff3df
+          });
+        }
+      }
+    } else if (meta.attackCooldownMs <= 0) {
+      meta.burstShotsLeft = 3 + Math.floor(rage * 3);
+      meta.attackCooldownMs = Math.max(520, 840 - rage * 240);
+    }
+
+    if (meta.specialCooldownMs <= 0) {
+      meta.specialCooldownMs = Math.max(4200, 7100 - rage * 1300);
+      const ringShots = 12 + Math.floor(rage * 6);
+      const start = randomRange(0, Math.PI * 2);
+      for (let shot = 0; shot < ringShots; shot += 1) {
+        const angle = start + (Math.PI * 2 * shot) / ringShots;
+        this.spawnEnemyBullet(enemy.x, enemy.y, angle, (meta.def.rangedDamage || 20) * 0.7, {
+          speed: 340 + rage * 110,
+          scaleMul: 1.06,
+          tint: 0xffd9a8,
+          trailTint: 0xffcb94,
+          impactTint: 0xffe5c4
+        });
+      }
+      this.spawnHitFx(enemy.x, enemy.y, 1.8, true, 0xffe4b8);
+
+      if (this.enemies.countActive(true) < 80) {
+        const reinforcements = 2 + Math.floor(rage * 2);
+        for (let index = 0; index < reinforcements; index += 1) {
+          this.spawnEnemy(index % 2 === 0 ? "spitter" : "swarmling", "aroundPlayer");
+        }
+      }
+    }
+
+    return { dirX: moveX, dirY: moveY, speedMul };
   }
 
   private updatePickups(deltaMs: number): void {
@@ -1804,14 +2306,19 @@ export class GameScene extends Phaser.Scene {
         continue;
       }
 
-      const dx = this.player.x - pickup.x;
-      const dy = this.player.y - pickup.y;
-      const dSq = distSq(this.player.x, this.player.y, pickup.x, pickup.y);
+      const delta = this.getWorldDelta(pickup.x, pickup.y, this.player.x, this.player.y);
+      const dx = delta.dx;
+      const dy = delta.dy;
+      const dSq = dx * dx + dy * dy;
 
       if (dSq < pickupRangeSq) {
         const distance = Math.sqrt(Math.max(dSq, 0.001));
         const pull = (1 - distance / this.playerPickupRange) * 340;
         pickup.setVelocity((dx / distance) * pull, (dy / distance) * pull);
+      }
+
+      if (this.isEndlessLevel()) {
+        this.wrapInWorld(pickup);
       }
     }
   }
@@ -1926,7 +2433,7 @@ export class GameScene extends Phaser.Scene {
         continue;
       }
 
-      const sq = distSq(x, y, enemy.x, enemy.y);
+      const sq = this.getWorldDistanceSq(x, y, enemy.x, enemy.y);
 
       if (sq > radiusSq) {
         continue;
@@ -1970,7 +2477,7 @@ export class GameScene extends Phaser.Scene {
         continue;
       }
 
-      const sq = distSq(source.x, source.y, enemy.x, enemy.y);
+      const sq = this.getWorldDistanceSq(source.x, source.y, enemy.x, enemy.y);
 
       if (sq > maxRangeSq) {
         continue;
@@ -2246,15 +2753,16 @@ export class GameScene extends Phaser.Scene {
             continue;
           }
 
-          const sq = distSq(field.x, field.y, enemy.x, enemy.y);
+          const sq = this.getWorldDistanceSq(field.x, field.y, enemy.x, enemy.y);
 
           if (sq > radiusSq) {
             continue;
           }
 
+          const delta = this.getWorldDelta(enemy.x, enemy.y, field.x, field.y);
           const dist = Math.sqrt(Math.max(sq, 0.001));
-          const nx = (field.x - enemy.x) / dist;
-          const ny = (field.y - enemy.y) / dist;
+          const nx = delta.dx / dist;
+          const ny = delta.dy / dist;
           const factor = 1 - dist / field.radius;
 
           const eBody = enemy.body as Phaser.Physics.Arcade.Body | undefined;
@@ -2308,7 +2816,21 @@ export class GameScene extends Phaser.Scene {
     this.damagePlayer(meta.damage, "spitter");
   }
 
-  private spawnEnemyBullet(x: number, y: number, angle: number, damage: number): void {
+  private spawnEnemyBullet(
+    x: number,
+    y: number,
+    angle: number,
+    damage: number,
+    options?: {
+      speed?: number;
+      scaleMul?: number;
+      tint?: number;
+      trailTint?: number;
+      impactTint?: number;
+      impactCritTint?: number;
+      lifeMs?: number;
+    }
+  ): void {
     const bullet = this.enemyBullets.get(x, y, "tex_enemy_bullet") as Phaser.Physics.Arcade.Image | null;
 
     if (!bullet) {
@@ -2319,28 +2841,28 @@ export class GameScene extends Phaser.Scene {
     bullet.body!.enable = true;
     bullet.setPosition(x, y);
     bullet.setDepth(6);
-    bullet.setScale(ENEMY_BULLET_SCALE);
+    bullet.setScale(ENEMY_BULLET_SCALE * (options?.scaleMul ?? 1));
     bullet.setBlendMode(Phaser.BlendModes.ADD);
     bullet.clearTint();
-    bullet.setTint(0xffad7a);
+    bullet.setTint(options?.tint ?? 0xffad7a);
     bullet.setRotation(angle - PLAYER_FORWARD_ROTATION_OFFSET);
     const body = bullet.body as Phaser.Physics.Arcade.Body;
     body.setSize(ENEMY_BULLET_BODY_SIZE, ENEMY_BULLET_BODY_SIZE, true);
 
-    const speed = 390;
+    const speed = options?.speed ?? 390;
     bullet.setVelocity(Math.cos(angle) * speed, Math.sin(angle) * speed);
 
     this.bulletMeta.set(bullet, {
-      lifeMs: 2800,
+      lifeMs: options?.lifeMs ?? 2800,
       damage,
       critChance: 0,
       critDamage: 1,
       trailTickMs: randomRange(0, 70),
       trailIntervalMs: 70,
-      trailTint: 0xff9f7a,
+      trailTint: options?.trailTint ?? 0xff9f7a,
       trailScale: 0.22,
-      impactTint: 0xffaf91,
-      impactCritTint: 0xffddcb,
+      impactTint: options?.impactTint ?? 0xffaf91,
+      impactCritTint: options?.impactCritTint ?? 0xffddcb,
       impactScale: 0.85,
       pierceLeft: 0,
       splashRadius: 0,
@@ -2360,7 +2882,17 @@ export class GameScene extends Phaser.Scene {
     const ex = enemy.x;
     const ey = enemy.y;
     const visual = enemyVisual(meta.def.id);
-    this.spawnExplosionFx(ex, ey, visual.hitFxScale * (meta.def.id === "crusher" ? 2.1 : 1.6));
+    const explosionMul =
+      meta.def.id === "final_boss_overseer"
+        ? 3.2
+        : meta.def.id === "mid_boss_behemoth"
+          ? 2.7
+          : meta.def.id === "mini_boss_raider"
+            ? 2.25
+            : meta.def.id === "crusher"
+              ? 2.1
+              : 1.6;
+    this.spawnExplosionFx(ex, ey, visual.hitFxScale * explosionMul);
 
     if (killerMeta?.isPlayerBullet && killerMeta.sourceWeaponId === "void_blaster" && Math.random() < 0.26) {
       this.spawnVoidSingularity(ex, ey, killerMeta.impactCritTint);
@@ -2375,6 +2907,10 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.spawnDrop(meta, ex, ey);
+
+    if (meta.bossTier > 0) {
+      this.game.events.emit(EVENT_TOAST, `${meta.def.name} destroyed`);
+    }
 
     const leech = this.activeUpgrades.find(item => item.onKillHealEvery && item.onKillHealAmount);
 
@@ -3093,6 +3629,13 @@ export class GameScene extends Phaser.Scene {
   private checkMissionResult(): void {
     if (this.playerHp <= 0) {
       this.endRun(false);
+      return;
+    }
+
+    if (this.isEndlessLevel()) {
+      if (this.elapsedMs / 1000 >= this.level.durationSec) {
+        this.endRun(true);
+      }
       return;
     }
 
@@ -4104,6 +4647,9 @@ export class GameScene extends Phaser.Scene {
   private refreshHud(): void {
     const remaining = Math.max(0, this.level.durationSec - this.elapsedMs / 1000);
     const weaponDef = weaponById[this.weapon.weaponId] || WEAPON_DEFS[0];
+    const objectiveText = this.isEndlessLevel()
+      ? `Survive ${formatSeconds(remaining)} | Kills ${this.kills} / ${this.level.killTarget} | Threat T${this.endlessThreatTier}`
+      : `Kills ${this.kills} / ${this.level.killTarget}`;
 
     this.game.events.emit(EVENT_HUD_UPDATE, {
       hp: this.playerHp,
@@ -4117,8 +4663,8 @@ export class GameScene extends Phaser.Scene {
       weaponStatsText: `DMG ${this.weaponStats.damage.toFixed(0)} | Rate ${this.weaponStats.fireRate.toFixed(1)} | Mag ${this.weaponStats.magazineSize}`,
       ammoText: `Ammo ${this.weaponAmmo}/${this.weaponStats.magazineSize}`,
       reloadText: this.weaponReloadMs > 0 ? `Reload ${(this.weaponReloadMs / 1000).toFixed(1)}s` : "Ready",
-      missionText: this.level.name,
-      objectiveText: `Kills ${this.kills} / ${this.level.killTarget}`,
+      missionText: this.isEndlessLevel() ? `${this.level.name} ∞` : this.level.name,
+      objectiveText,
       creditsText: String(gameState.saveData.credits),
       perkText: this.getPerkSummaryText(),
       superText: this.getSuperHudText()

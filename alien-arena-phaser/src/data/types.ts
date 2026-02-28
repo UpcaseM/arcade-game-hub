@@ -71,6 +71,7 @@ export interface LevelDef {
   description: string;
   mapKey: string;
   difficulty: 1 | 2 | 3 | 4 | 5;
+  endless?: boolean;
   mapSize: {
     width: number;
     height: number;
