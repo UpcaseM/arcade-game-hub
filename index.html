@@ -143,7 +143,15 @@
         <p>Traditional Chinese animal chess</p>
       </div>
 
-      <div id="game-container" style="width: 1000px; height: 650px; margin: 0 auto;"></div>
+      <div class="dou-iframe-shell" aria-label="Dou Shou Qi game frame">
+        <iframe
+          id="douShouQiFrame"
+          title="Dou Shou Qi"
+          loading="lazy"
+          referrerpolicy="no-referrer"
+          allow="fullscreen"
+        ></iframe>
+      </div>
     </section>
 
     <section id="colorScreen" class="screen" aria-label="Color Match game">
@@ -187,6 +195,5 @@
   </main>
 
   <script src="script.js" defer></script>
-  <script src="dou-shou-qi/dist/main.js" defer></script>
 </body>
 </html>

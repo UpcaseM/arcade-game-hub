@@ -33,6 +33,18 @@ export class DouShouQiGame extends Phaser.Game {
   }
 }
 
-window.addEventListener("load", () => {
-  new DouShouQiGame(config);
-});
+let gameInstance: DouShouQiGame | null = null;
+
+function bootDouShouQi() {
+  if (gameInstance || !document.getElementById("game-container")) {
+    return;
+  }
+
+  gameInstance = new DouShouQiGame(config);
+}
+
+if (document.readyState === "loading") {
+  window.addEventListener("DOMContentLoaded", bootDouShouQi, { once: true });
+} else {
+  bootDouShouQi();
+}

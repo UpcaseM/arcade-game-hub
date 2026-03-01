@@ -12,6 +12,13 @@ const screens = {
   douShouQi: document.getElementById('douShouQiScreen')
 };
 
+const gameRouteMap = {
+  'dou-shou-qi': 'douShouQi'
+};
+
+const douShouQiFrame = document.getElementById('douShouQiFrame');
+const douShouQiPath = 'dou-shou-qi/dist/index.html';
+
 const gameButtons = document.querySelectorAll('[data-open-game]');
 const backButtons = document.querySelectorAll('[data-back-to-menu]');
 
@@ -57,6 +64,10 @@ function showScreen(name) {
     stopColorGame('Game paused. Press Start to play again.');
   }
 
+  if (currentScreen === 'douShouQi' && name !== 'douShouQi') {
+    unloadDouShouQiGame();
+  }
+
   Object.values(screens).forEach(screen => {
     screen.classList.remove('screen-active');
   });
@@ -65,13 +76,7 @@ function showScreen(name) {
   currentScreen = name;
 
   if (name === 'douShouQi') {
-    const gameContainer = document.getElementById('game-container');
-    if (gameContainer) {
-      gameContainer.innerHTML = ''; // Clear any existing content
-      const script = document.createElement('script');
-      script.src = 'dou-shou-qi/dist/main.js';
-      document.head.appendChild(script);
-    }
+    loadDouShouQiGame();
   }
 
   if (snakeRunning && snakePaused && !snakeGameOver) {
@@ -82,9 +87,27 @@ function showScreen(name) {
 gameButtons.forEach(button => {
   button.addEventListener('click', () => {
     const gameName = button.dataset.openGame;
-    showScreen(gameName);
+    showScreen(gameRouteMap[gameName] || gameName);
   });
 });
+
+function loadDouShouQiGame() {
+  if (!douShouQiFrame || douShouQiFrame.dataset.loaded === 'true') {
+    return;
+  }
+
+  douShouQiFrame.src = douShouQiPath;
+  douShouQiFrame.dataset.loaded = 'true';
+}
+
+function unloadDouShouQiGame() {
+  if (!douShouQiFrame || douShouQiFrame.dataset.loaded !== 'true') {
+    return;
+  }
+
+  douShouQiFrame.src = 'about:blank';
+  delete douShouQiFrame.dataset.loaded;
+}
 
 backButtons.forEach(button => {
   button.addEventListener('click', () => {

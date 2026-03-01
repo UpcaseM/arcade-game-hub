@@ -1,4 +1,4 @@
-import Phaser from 'phason';
+import Phaser from 'phaser';
 
 export class DouShouQiMainMenuScene extends Phaser.Scene {
   constructor() {

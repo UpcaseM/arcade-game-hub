@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
-import { createInitialGameState, GameState, PlayerColor, GameStatus, MoveResult, isValidMove, getValidMoves, checkWinCondition, switchPlayer } from '../data/gameData';
+import { createInitialGameState, GameState, isValidMove, getValidMoves, checkWinCondition, switchPlayer } from '../../data/gameData';
+import { MoveResult, Animal } from '../../data/types';
 
 const ANIMAL_COLORS = {
   blue: '#3b82f6',
@@ -15,17 +16,6 @@ const ANIMAL_ICONS: Record<string, string> = {
   'Wolf': '🐺',
   'Cat': '🐱',
   'Mouse': '🐀'
-};
-
-const ANIMAL_RANKS: Record<string, number> = {
-  'Elephant': 8,
-  'Lion': 7,
-  'Tiger': 6,
-  'Leopard': 5,
-  'Dog': 4,
-  'Wolf': 3,
-  'Cat': 2,
-  'Mouse': 1
 };
 
 const CELL_SIZE = 60;
@@ -44,8 +34,6 @@ export class DouShouQiGameScene extends Phaser.Scene {
   private moveCooldown: number = 300;
   private currentPlayerIndicator: Phaser.GameObjects.Text;
   private statusText: Phaser.GameObjects.Text;
-  private scoreText: Phaser.GameObjects.Text;
-  private moveHistory: string[] = [];
 
   constructor() {
     super('DouShouQiGameScene');
@@ -68,7 +56,6 @@ export class DouShouQiGameScene extends Phaser.Scene {
     this.boardGraphics = this.add.graphics();
     this.boardGraphics.lineStyle(2, 0x2d3748, 1);
 
-    // Draw grid
     for (let row = 0; row <= BOARD_ROWS; row++) {
       const y = BOARD_OFFSET_Y + row * CELL_SIZE;
       this.boardGraphics.moveTo(BOARD_OFFSET_X, y);
@@ -80,8 +67,6 @@ export class DouShouQiGameScene extends Phaser.Scene {
       this.boardGraphics.lineTo(x, BOARD_OFFSET_Y + BOARD_ROWS * CELL_SIZE);
     }
     this.boardGraphics.strokePath();
-
-    // Draw special areas
     this.drawSpecialAreas();
   }
 
@@ -90,8 +75,8 @@ export class DouShouQiGameScene extends Phaser.Scene {
 
     // Draw dens
     const denPositions = [
-      { col: 3, row: 0, color: 0x9ca3af }, // Red den
-      { col: 3, row: 8, color: 0x9ca3af }  // Blue den
+      { col: 3, row: 0, color: 0x9ca3af },
+      { col: 3, row: 8, color: 0x9ca3af }
     ];
 
     denPositions.forEach(({ col, row, color }) => {
@@ -106,8 +91,8 @@ export class DouShouQiGameScene extends Phaser.Scene {
 
     // Draw traps
     const trapPositions = [
-      { col: 2, row: 1 }, { col: 3, row: 1 }, { col: 4, row: 1 }, // Red traps
-      { col: 2, row: 7 }, { col: 3, row: 7 }, { col: 4, row: 7 }  // Blue traps
+      { col: 2, row: 1 }, { col: 3, row: 1 }, { col: 4, row: 1 },
+      { col: 2, row: 7 }, { col: 3, row: 7 }, { col: 4, row: 7 }
     ];
 
     trapPositions.forEach(({ col, row }) => {
@@ -173,12 +158,6 @@ export class DouShouQiGameScene extends Phaser.Scene {
       { fontSize: '16px', color: '#64748b', fontFamily: 'Arial' }
     );
 
-    this.scoreText = this.add.text(
-      20, 80,
-      'Score: 0',
-      { fontSize: '16px', color: '#64748b', fontFamily: 'Arial' }
-    );
-
     const backButton = this.add.text(
       20, 680,
       '← Back to Menu',
@@ -210,10 +189,8 @@ export class DouShouQiGameScene extends Phaser.Scene {
     const animal = this.getAnimalAtCell(col, row);
     
     if (animal && animal.color === this.gameState.currentPlayer) {
-      // Select animal
       this.selectAnimal(animal);
     } else if (this.selectedAnimalId) {
-      // Try to move selected animal
       this.attemptMove(col, row);
     }
   }
@@ -222,44 +199,31 @@ export class DouShouQiGameScene extends Phaser.Scene {
     this.selectedAnimalId = animal.id;
     this.validMoves = getValidMoves(this.gameState, animal);
     
-    // Highlight valid moves
     this.validMoves.forEach(({ col, row }) => {
-      const highlight = this.add.rectangle(
+      this.add.rectangle(
         BOARD_OFFSET_X + col * CELL_SIZE + CELL_SIZE / 2,
         BOARD_OFFSET_Y + row * CELL_SIZE + CELL_SIZE / 2,
         CELL_SIZE - 10,
         CELL_SIZE - 10,
         0x22c55e
       ).setOrigin(0.5).setAlpha(0.5);
-      
-      // Store highlight for later removal
-      this.add.highlight = highlight;
     });
   }
 
   private attemptMove(targetCol: number, targetRow: number): void {
     const animal = this.gameState.animals[this.selectedAnimalId!];
-    
     if (!animal) return;
 
     const result = this.makeMove(animal, targetCol, targetRow);
     
     if (result.success) {
       this.lastMoveTime = Date.now();
-      this.clearHighlights();
-      this.selectedAnimalId = undefined;
-      this.validMoves = undefined;
+      this.scene.restart();
       
-      this.updateGameStatus();
-      
-      // Check for win condition
       const winStatus = checkWinCondition(this.gameState);
       if (winStatus !== 'playing') {
-        this.gameState.status = winStatus;
         this.showWinMessage(winStatus);
       }
-    } else {
-      console.log('Invalid move:', result.reason);
     }
   }
 
@@ -270,15 +234,11 @@ export class DouShouQiGameScene extends Phaser.Scene {
 
     const capturedAnimal = this.getAnimalAtCell(targetCol, targetRow);
     
-    // Update animal position
     animal.col = targetCol;
     animal.row = targetRow;
-    
-    // Update game state
     this.gameState.animals[animal.id] = animal;
     this.gameState.currentPlayer = switchPlayer(this.gameState.currentPlayer);
     
-    // Update sprite position
     const sprite = this.animalSprites.get(animal.id);
     if (sprite) {
       this.tweens.add({
@@ -290,32 +250,16 @@ export class DouShouQiGameScene extends Phaser.Scene {
       });
     }
     
-    // Handle capture
     if (capturedAnimal) {
       this.animalSprites.get(capturedAnimal.id)?.destroy();
       delete this.gameState.animals[capturedAnimal.id];
     }
     
-    this.moveHistory.push(`${animal.name} moved to (${targetCol}, ${targetRow})`);
-    
-    return {
-      success: true,
-      gameState: this.gameState,
-      capturedAnimal,
-      winStatus: checkWinCondition(this.gameState)
-    };
+    return { success: true, gameState: this.gameState, capturedAnimal };
   }
 
   private getAnimalAtCell(col: number, row: number): Animal | undefined {
-    return Object.values(this.gameState.animals).find(animal => animal.col === col && animal.row === row);
-  }
-
-  private clearHighlights(): void {
-    this.children.each(child => {
-      if (child.highlight) {
-        child.highlight.destroy();
-      }
-    });
+    return Object.values(this.gameState.animals).find(a => a.col === col && a.row === row);
   }
 
   private updateGameStatus(): void {
@@ -323,7 +267,7 @@ export class DouShouQiGameScene extends Phaser.Scene {
     this.statusText.setText(`Game Status: ${this.gameState.status}`);
   }
 
-  private showWinMessage(status: GameStatus): void {
+  private showWinMessage(status: string): void {
     const message = status === 'blue_won' ? 'Blue player wins!' : 
                     status === 'red_won' ? 'Red player wins!' : 'Game over';
     
@@ -344,11 +288,5 @@ export class DouShouQiGameScene extends Phaser.Scene {
     });
   }
 
-  update(): void {
-    // Handle game updates
-  }
-
-  resize(width: number, height: number): void {
-    // Handle resize if needed
-  }
+  update(): void {}
 }

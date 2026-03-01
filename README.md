@@ -31,6 +31,8 @@ A modern browser-based game hub built with plain HTML, CSS, and JavaScript.
 - `alien-arena-phaser/` - Alien Arena source project (Phaser 3 + TypeScript + Vite + Vitest)
 - `alien-arena/` - built static output served by GitHub Pages
 - `dojo-brawler/` - standalone static fighting game (HTML/CSS/JS + Kenney CC0 assets)
+- `dou-shou-qi/` - Dou Shou Qi source + committed `dist/` build for static deployment
+- `tools/validate-static-paths.mjs` - static path guard for GitHub Pages-compatible relative URLs
 
 ## Run Locally
 
@@ -51,6 +53,18 @@ Open:
 - Alien Arena direct: `http://localhost:8000/alien-arena/`
 - Dojo Brawler direct: `http://localhost:8000/dojo-brawler/`
 
+Dou Shou Qi source workflow:
+
+```bash
+cd dou-shou-qi
+npm ci
+npm run build
+cd ..
+node tools/validate-static-paths.mjs
+```
+
+`dou-shou-qi/dist/` is intentionally tracked because GitHub Pages serves this repo directly from `/` without a build step.
+
 Alien Arena source workflow:
 
 ```bash
@@ -66,6 +80,8 @@ npm run build
 ## Deployment Options
 
 This project has no backend. Hub is static, and Alien Arena is prebuilt to static assets.
+
+For GitHub Pages subpaths (`https://<user>.github.io/<repo>/`), keep game references relative (for example `dou-shou-qi/dist/index.html`) and avoid root-absolute asset URLs like `/assets/...` inside built HTML.
 
 ### Option 1: GitHub Pages
 
@@ -170,3 +186,6 @@ window.__alienArenaQa.events()
 - Lucide Icons (`alien-arena/assets/game/icons/lucide/...`) for upgrade UI/FX badges:
   - Project: https://github.com/lucide-icons/lucide
   - License: ISC (`alien-arena-phaser/public/assets/game/icons/lucide/LICENSE`)
+- Dou Shou Qi currently uses procedural/text-rendered assets only (no external art/audio files).
+
+When adding future assets, use free/open licenses only (CC0, CC-BY, CC-BY-SA, ISC, MIT, etc.) and add attribution + source URL + license text in-repo.

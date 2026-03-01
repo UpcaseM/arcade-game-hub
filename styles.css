@@ -343,6 +343,25 @@ button:disabled {
   color: #d8e6ff;
 }
 
+.dou-iframe-shell {
+  width: 100%;
+  max-width: 1000px;
+  margin: 0 auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: #050915;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+}
+
+#douShouQiFrame {
+  display: block;
+  width: 100%;
+  height: min(650px, 72vh);
+  border: 0;
+  background: #050915;
+}
+
 .feedback.good {
   color: #89f6af;
 }
@@ -392,5 +411,9 @@ button:disabled {
   .actions button {
     flex: 1;
     min-width: 0;
+  }
+
+  #douShouQiFrame {
+    height: min(650px, 68vh);
   }
 }
