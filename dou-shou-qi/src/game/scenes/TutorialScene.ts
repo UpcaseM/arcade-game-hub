@@ -16,7 +16,7 @@ export class DouShouQiTutorialScene extends Phaser.Scene {
     Animal Ranks (Strongest to Weakest):
     1. Elephant (🐘) - Rank 8
     2. Lion (🦁) - Rank 7
-    3. Tiger (🦉) - Rank 6
+    3. Tiger (🐯) - Rank 6
     4. Leopard (🐆) - Rank 5
     5. Dog (🐕) - Rank 4
     6. Wolf (🐺) - Rank 3
@@ -30,9 +30,11 @@ export class DouShouQiTutorialScene extends Phaser.Scene {
     - Pieces capture opponent's pieces of equal or lower rank
 
     Special Rules:
-    - Mouse: Only animal that can move on river squares, can capture Elephant
-    - Lion/Tiger: Can jump over rivers horizontally or vertically
-    - Traps: Any animal can capture a higher-ranked animal in opponent's trap
+    - Mouse: Only animal that can enter river squares
+    - Mouse/Elephant: Mouse can capture Elephant from land, but Elephant cannot capture Mouse
+    - River combat: Mouse in river cannot capture land pieces (and land pieces cannot capture river Mouse)
+    - Lion/Tiger: Can jump across river squares in straight lines unless any Mouse blocks the river path
+    - Traps: A piece in an opponent trap can be captured by any enemy piece
     `;
 
     this.add.text(100, 120, tutorialText, { fontSize: '16px', color: '#4b5563', fontFamily: 'Arial', lineSpacing: 4 });

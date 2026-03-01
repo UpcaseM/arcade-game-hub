@@ -38,8 +38,8 @@ Dou Shou Qi (斗兽棋), also known as Jungle or Animal Chess, is a classic Chin
 
 **Mouse:**
 - Only animal that can move on river squares
-- Can capture Elephant (special rule)
-- Mouse vs Mouse: can only capture if both are in the river
+- Can capture Elephant from land
+- Cannot capture from river to land (and land pieces cannot capture a river Mouse)
 
 **Lion & Tiger:**
 - Can jump over rivers horizontally or vertically
@@ -65,6 +65,11 @@ npm run dev
 3. Build for production:
 ```bash
 npm run build
+```
+
+4. Run tests:
+```bash
+npm test
 ```
 
 ## Files Structure
@@ -100,8 +105,13 @@ dou-shou-qi/
   - Proper animal hierarchy
   - River traversal (Mouse only)
   - Lion/Tiger river jumping
+  - Rat blocking along jump paths
   - Trap mechanics
   - Win conditions (reach den or eliminate all enemies)
+
+## Rule Research and Comparison
+
+- See `docs/rule-comparison-matrix.md` for the source-backed rule matrix (current vs standard vs implemented behavior) and citations.
 
 ## Controls
 
@@ -122,6 +132,8 @@ dou-shou-qi/
 ## Credits
 
 Game rules based on traditional Dou Shou Qi / Jungle board game.
+
+Primary rules references are listed in `docs/rule-comparison-matrix.md`.
 
 ## License
 
