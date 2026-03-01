@@ -9,6 +9,11 @@ A modern browser-based game hub built with plain HTML, CSS, and JavaScript.
 - **Tap Blitz** reaction mini-game
 - **Color Match** rapid brain challenge
 - **Dou Shou Qi** (斗兽棋/Jungle Chess) with 7×9 board, 8 animals, full rule set
+- **Dojo Brawler** 1v1 arcade fighting game with:
+  - Keyboard + mobile touch controls
+  - Enemy AI (approach/strafe/retreat/attack)
+  - Hitbox collision combat, HP bars, win/lose loop
+  - Restart and back-to-hub actions
 - **Alien Arena** top-down survival shooter with:
   - Level select + mission unlock progression
   - Wave scheduler with multiple enemy archetypes
@@ -25,6 +30,7 @@ A modern browser-based game hub built with plain HTML, CSS, and JavaScript.
 - `script.js` - game logic and controls
 - `alien-arena-phaser/` - Alien Arena source project (Phaser 3 + TypeScript + Vite + Vitest)
 - `alien-arena/` - built static output served by GitHub Pages
+- `dojo-brawler/` - standalone static fighting game (HTML/CSS/JS + Kenney CC0 assets)
 
 ## Run Locally
 
@@ -43,6 +49,7 @@ Then visit `http://localhost:8000`.
 Open:
 - Hub: `http://localhost:8000/`
 - Alien Arena direct: `http://localhost:8000/alien-arena/`
+- Dojo Brawler direct: `http://localhost:8000/dojo-brawler/`
 
 Alien Arena source workflow:
 
@@ -156,6 +163,10 @@ window.__alienArenaQa.events()
 ## Asset Credits
 
 - Kenney Space Shooter Extension assets (`alien-arena/assets/game/kenney/...`) with included license files.
+- Kenney Space Shooter Extension assets for Dojo Brawler (`dojo-brawler/assets/kenney/...`):
+  - Asset page: https://www.kenney.nl/assets/space-shooter-extension
+  - Mirror/source listing: https://opengameart.org/content/space-shooter-extension
+  - License: CC0 1.0 (`dojo-brawler/assets/kenney/license/SPACE_SHOOTER_EXTENSION_LICENSE.txt`)
 - Lucide Icons (`alien-arena/assets/game/icons/lucide/...`) for upgrade UI/FX badges:
   - Project: https://github.com/lucide-icons/lucide
   - License: ISC (`alien-arena-phaser/public/assets/game/icons/lucide/LICENSE`)
