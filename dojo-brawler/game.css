@@ -242,7 +242,7 @@ button {
   display: none;
 }
 
-@media (max-width: 860px) {
+@media (hover: none), (pointer: coarse), (max-width: 860px) {
   .mobile-controls {
     display: flex;
   }
