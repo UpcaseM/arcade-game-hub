@@ -10,7 +10,7 @@ const ANIMAL_COLORS = {
 const ANIMAL_ICONS: Record<string, string> = {
   'Elephant': '🐘',
   'Lion': '🦁',
-  'Tiger': '🦅',
+  'Tiger': '🐯',
   'Leopard': '🐆',
   'Dog': '🐕',
   'Wolf': '🐺',
@@ -91,8 +91,8 @@ export class DouShouQiGameScene extends Phaser.Scene {
 
     // Draw traps
     const trapPositions = [
-      { col: 2, row: 1 }, { col: 3, row: 1 }, { col: 4, row: 1 },
-      { col: 2, row: 7 }, { col: 3, row: 7 }, { col: 4, row: 7 }
+      { col: 2, row: 0 }, { col: 3, row: 1 }, { col: 4, row: 0 },
+      { col: 2, row: 8 }, { col: 3, row: 7 }, { col: 4, row: 8 }
     ];
 
     trapPositions.forEach(({ col, row }) => {
@@ -106,7 +106,8 @@ export class DouShouQiGameScene extends Phaser.Scene {
     });
 
     // Draw river
-    for (let col = 1; col <= 5; col++) {
+    const riverColumns = [1, 2, 4, 5];
+    for (const col of riverColumns) {
       for (let row = 3; row <= 5; row++) {
         specialGraphics.fillStyle(0x60a5fa, 0.1);
         specialGraphics.fillRect(
