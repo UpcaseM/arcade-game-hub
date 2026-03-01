@@ -8,6 +8,7 @@ A modern browser-based game hub built with plain HTML, CSS, and JavaScript.
 - **Snake Turbo** with responsive timing and left/right turn controls
 - **Tap Blitz** reaction mini-game
 - **Color Match** rapid brain challenge
+- **Dou Shou Qi** (斗兽棋/Jungle Chess) with 7×9 board, 8 animals, full rule set
 - **Alien Arena** top-down survival shooter with:
   - Level select + mission unlock progression
   - Wave scheduler with multiple enemy archetypes
