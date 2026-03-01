@@ -8,7 +8,7 @@ A modern browser-based game hub built with plain HTML, CSS, and JavaScript.
 - **Snake Turbo** with responsive timing and left/right turn controls
 - **Tap Blitz** reaction mini-game
 - **Color Match** rapid brain challenge
-- **Dou Shou Qi** (斗兽棋/Jungle Chess) with 7×9 board, 8 animals, full rule set
+- **Dou Shou Qi Flip Mode** (斗兽翻牌版) with random face-down start and first-reveal side assignment
 - **Dojo Brawler** 1v1 arcade fighting game with:
   - Keyboard + mobile touch controls
   - Enemy AI (approach/strafe/retreat/attack)
@@ -31,7 +31,7 @@ A modern browser-based game hub built with plain HTML, CSS, and JavaScript.
 - `alien-arena-phaser/` - Alien Arena source project (Phaser 3 + TypeScript + Vite + Vitest)
 - `alien-arena/` - built static output served by GitHub Pages
 - `dojo-brawler/` - standalone static fighting game (HTML/CSS/JS + Kenney CC0 assets)
-- `dou-shou-qi/` - Dou Shou Qi source + committed `dist/` build for static deployment
+- `dou-shou-qi/` - Dou Shou Qi Flip Mode source + committed `dist/` build for static deployment
 - `tools/validate-static-paths.mjs` - static path guard for GitHub Pages-compatible relative URLs
 
 ## Run Locally

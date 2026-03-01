@@ -1,39 +1,41 @@
 import Phaser from 'phaser';
-import { createInitialGameState, GameState, isValidMove, getValidMoves, checkWinCondition, switchPlayer } from '../../data/gameData';
-import { MoveResult, Animal } from '../../data/types';
+import {
+  ANIMAL_SYMBOLS,
+  BOARD_COLS,
+  BOARD_OFFSET_X,
+  BOARD_OFFSET_Y,
+  BOARD_ROWS,
+  CELL_SIZE,
+  createInitialGameState,
+  flipAnimal,
+  getAnimalAtCell,
+  getCurrentPlayerColor,
+  getValidMoves,
+  isOwnedByCurrentTurn,
+  moveAnimal
+} from '../../data/gameData';
+import { Animal, GameState } from '../../data/types';
 
-const ANIMAL_COLORS = {
-  blue: '#3b82f6',
-  red: '#ef4444'
-};
+const COLOR_HEX = {
+  blue: '#60a5fa',
+  red: '#f87171'
+} as const;
 
-const ANIMAL_ICONS: Record<string, string> = {
-  'Elephant': '🐘',
-  'Lion': '🦁',
-  'Tiger': '🐯',
-  'Leopard': '🐆',
-  'Dog': '🐕',
-  'Wolf': '🐺',
-  'Cat': '🐱',
-  'Mouse': '🐀'
-};
-
-const CELL_SIZE = 60;
-const BOARD_OFFSET_X = 100;
-const BOARD_OFFSET_Y = 80;
-const BOARD_COLS = 7;
-const BOARD_ROWS = 9;
+const PLAYER_LABEL = {
+  player1: 'Player 1',
+  player2: 'Player 2'
+} as const;
 
 export class DouShouQiGameScene extends Phaser.Scene {
-  private gameState: GameState;
-  private boardGraphics: Phaser.GameObjects.Graphics;
-  private animalSprites: Map<string, Phaser.GameObjects.Text>;
-  private selectedAnimalId?: string;
-  private validMoves?: { col: number; row: number }[];
-  private lastMoveTime: number = 0;
-  private moveCooldown: number = 300;
-  private currentPlayerIndicator: Phaser.GameObjects.Text;
-  private statusText: Phaser.GameObjects.Text;
+  private gameState!: GameState;
+  private boardGraphics!: Phaser.GameObjects.Graphics;
+  private pieceSprites: Map<string, Phaser.GameObjects.Text> = new Map();
+  private highlightRects: Phaser.GameObjects.Rectangle[] = [];
+
+  private turnText!: Phaser.GameObjects.Text;
+  private roleText!: Phaser.GameObjects.Text;
+  private infoText!: Phaser.GameObjects.Text;
+  private actionText!: Phaser.GameObjects.Text;
 
   constructor() {
     super('DouShouQiGameScene');
@@ -41,253 +43,292 @@ export class DouShouQiGameScene extends Phaser.Scene {
 
   init(): void {
     this.gameState = createInitialGameState();
-    this.animalSprites = new Map();
   }
 
   create(): void {
     this.createBoard();
-    this.createAnimals();
     this.createUI();
+    this.renderPieces();
+    this.renderHud();
     this.setupInput();
-    this.updateGameStatus();
   }
 
   private createBoard(): void {
     this.boardGraphics = this.add.graphics();
-    this.boardGraphics.lineStyle(2, 0x2d3748, 1);
 
-    for (let row = 0; row <= BOARD_ROWS; row++) {
-      const y = BOARD_OFFSET_Y + row * CELL_SIZE;
-      this.boardGraphics.moveTo(BOARD_OFFSET_X, y);
-      this.boardGraphics.lineTo(BOARD_OFFSET_X + BOARD_COLS * CELL_SIZE, y);
+    const width = BOARD_COLS * CELL_SIZE;
+    const height = BOARD_ROWS * CELL_SIZE;
+
+    this.boardGraphics.fillStyle(0x0b1220, 1);
+    this.boardGraphics.fillRect(BOARD_OFFSET_X, BOARD_OFFSET_Y, width, height);
+
+    this.boardGraphics.lineStyle(3, 0x334155, 1);
+    this.boardGraphics.strokeRect(BOARD_OFFSET_X, BOARD_OFFSET_Y, width, height);
+
+    this.boardGraphics.lineStyle(2, 0x1e293b, 1);
+    for (let r = 1; r < BOARD_ROWS; r += 1) {
+      const y = BOARD_OFFSET_Y + r * CELL_SIZE;
+      this.boardGraphics.lineBetween(BOARD_OFFSET_X, y, BOARD_OFFSET_X + width, y);
     }
-    for (let col = 0; col <= BOARD_COLS; col++) {
-      const x = BOARD_OFFSET_X + col * CELL_SIZE;
-      this.boardGraphics.moveTo(x, BOARD_OFFSET_Y);
-      this.boardGraphics.lineTo(x, BOARD_OFFSET_Y + BOARD_ROWS * CELL_SIZE);
+    for (let c = 1; c < BOARD_COLS; c += 1) {
+      const x = BOARD_OFFSET_X + c * CELL_SIZE;
+      this.boardGraphics.lineBetween(x, BOARD_OFFSET_Y, x, BOARD_OFFSET_Y + height);
     }
-    this.boardGraphics.strokePath();
-    this.drawSpecialAreas();
-  }
-
-  private drawSpecialAreas(): void {
-    const specialGraphics = this.add.graphics();
-
-    // Draw dens
-    const denPositions = [
-      { col: 3, row: 0, color: 0x9ca3af },
-      { col: 3, row: 8, color: 0x9ca3af }
-    ];
-
-    denPositions.forEach(({ col, row, color }) => {
-      specialGraphics.fillStyle(color, 0.3);
-      specialGraphics.fillRect(
-        BOARD_OFFSET_X + col * CELL_SIZE + 2,
-        BOARD_OFFSET_Y + row * CELL_SIZE + 2,
-        CELL_SIZE - 4,
-        CELL_SIZE - 4
-      );
-    });
-
-    // Draw traps
-    const trapPositions = [
-      { col: 2, row: 0 }, { col: 3, row: 1 }, { col: 4, row: 0 },
-      { col: 2, row: 8 }, { col: 3, row: 7 }, { col: 4, row: 8 }
-    ];
-
-    trapPositions.forEach(({ col, row }) => {
-      specialGraphics.fillStyle(0x6b7280, 0.2);
-      specialGraphics.fillRect(
-        BOARD_OFFSET_X + col * CELL_SIZE + 2,
-        BOARD_OFFSET_Y + row * CELL_SIZE + 2,
-        CELL_SIZE - 4,
-        CELL_SIZE - 4
-      );
-    });
-
-    // Draw river
-    const riverColumns = [1, 2, 4, 5];
-    for (const col of riverColumns) {
-      for (let row = 3; row <= 5; row++) {
-        specialGraphics.fillStyle(0x60a5fa, 0.1);
-        specialGraphics.fillRect(
-          BOARD_OFFSET_X + col * CELL_SIZE + 2,
-          BOARD_OFFSET_Y + row * CELL_SIZE + 2,
-          CELL_SIZE - 4,
-          CELL_SIZE - 4
-        );
-      }
-    }
-
-    specialGraphics.setDepth(-1);
-  }
-
-  private createAnimals(): void {
-    Object.values(this.gameState.animals).forEach(animal => {
-      this.createAnimalSprite(animal);
-    });
-  }
-
-  private createAnimalSprite(animal: Animal): void {
-    const sprite = this.add.text(
-      BOARD_OFFSET_X + animal.col * CELL_SIZE + CELL_SIZE / 2,
-      BOARD_OFFSET_Y + animal.row * CELL_SIZE + CELL_SIZE / 2,
-      ANIMAL_ICONS[animal.name],
-      {
-        fontSize: '32px',
-        color: ANIMAL_COLORS[animal.color],
-        fontFamily: 'Arial',
-        backgroundColor: '#1f2937',
-        padding: { x: 8, y: 4 }
-      }
-    );
-    sprite.setOrigin(0.5);
-    sprite.setDepth(1);
-    this.animalSprites.set(animal.id, sprite);
   }
 
   private createUI(): void {
-    this.currentPlayerIndicator = this.add.text(
-      20, 20,
-      `Current Player: ${this.gameState.currentPlayer}`,
-      { fontSize: '18px', color: '#374151', fontFamily: 'Arial' }
-    );
-
-    this.statusText = this.add.text(
-      20, 50,
-      'Game Status: Playing',
-      { fontSize: '16px', color: '#64748b', fontFamily: 'Arial' }
-    );
-
-    const backButton = this.add.text(
-      20, 680,
-      '← Back to Menu',
-      { fontSize: '18px', color: '#3b82f6', fontFamily: 'Arial' }
-    );
-    backButton.setInteractive();
-    backButton.on('pointerdown', () => {
-      this.scene.start('DouShouQiMainMenuScene');
+    this.turnText = this.add.text(24, 24, '', {
+      fontSize: '22px',
+      color: '#e2e8f0',
+      fontFamily: 'Arial'
     });
+
+    this.roleText = this.add.text(24, 56, '', {
+      fontSize: '18px',
+      color: '#94a3b8',
+      fontFamily: 'Arial'
+    });
+
+    this.infoText = this.add.text(24, 86, '', {
+      fontSize: '16px',
+      color: '#cbd5e1',
+      fontFamily: 'Arial'
+    });
+
+    this.actionText = this.add.text(24, 116, '', {
+      fontSize: '15px',
+      color: '#93c5fd',
+      fontFamily: 'Arial'
+    });
+
+    const backButton = this.add.text(24, 640, '← Back to Menu', {
+      fontSize: '20px',
+      color: '#3b82f6',
+      fontFamily: 'Arial'
+    });
+    backButton.setInteractive({ useHandCursor: true });
+    backButton.on('pointerdown', () => this.scene.start('DouShouQiMainMenuScene'));
   }
 
   private setupInput(): void {
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
-      if (this.gameState.status !== 'playing') return;
+      if (this.gameState.status !== 'playing') {
+        return;
+      }
 
       const col = Math.floor((pointer.x - BOARD_OFFSET_X) / CELL_SIZE);
       const row = Math.floor((pointer.y - BOARD_OFFSET_Y) / CELL_SIZE);
-
-      if (col >= 0 && col < BOARD_COLS && row >= 0 && row < BOARD_ROWS) {
-        this.handleBoardClick(col, row);
+      if (col < 0 || col >= BOARD_COLS || row < 0 || row >= BOARD_ROWS) {
+        return;
       }
+
+      this.handleCellTap(col, row);
     });
   }
 
-  private handleBoardClick(col: number, row: number): void {
-    const currentTime = Date.now();
-    if (currentTime - this.lastMoveTime < this.moveCooldown) return;
+  private handleCellTap(col: number, row: number): void {
+    const piece = getAnimalAtCell(this.gameState, col, row);
 
-    const animal = this.getAnimalAtCell(col, row);
-    
-    if (animal && animal.color === this.gameState.currentPlayer) {
-      this.selectAnimal(animal);
-    } else if (this.selectedAnimalId) {
-      this.attemptMove(col, row);
+    if (piece?.hidden) {
+      this.handleFlip(piece);
+      return;
+    }
+
+    const selectedId = this.gameState.selectedAnimalId;
+    const selectedPiece = selectedId ? this.gameState.animals[selectedId] : undefined;
+
+    if (selectedPiece) {
+      if (piece?.id === selectedPiece.id) {
+        this.clearSelection();
+        return;
+      }
+
+      const moved = this.handleMove(selectedPiece, col, row);
+      if (moved) {
+        return;
+      }
+
+      if (piece && isOwnedByCurrentTurn(this.gameState, piece)) {
+        this.selectPiece(piece);
+      } else {
+        this.clearSelection();
+      }
+      return;
+    }
+
+    if (piece && isOwnedByCurrentTurn(this.gameState, piece)) {
+      this.selectPiece(piece);
     }
   }
 
-  private selectAnimal(animal: Animal): void {
-    this.selectedAnimalId = animal.id;
-    this.validMoves = getValidMoves(this.gameState, animal);
-    
-    this.validMoves.forEach(({ col, row }) => {
-      this.add.rectangle(
+  private handleFlip(piece: Animal): void {
+    const result = flipAnimal(this.gameState, piece.id);
+    if (!result.success) {
+      this.gameState.lastAction = result.reason;
+      this.renderHud();
+      return;
+    }
+
+    this.clearSelection();
+    this.renderPieces();
+    this.renderHud();
+
+    if (result.winStatus && result.winStatus !== 'playing') {
+      this.showResult();
+    }
+  }
+
+  private handleMove(selectedPiece: Animal, targetCol: number, targetRow: number): boolean {
+    const result = moveAnimal(this.gameState, selectedPiece.id, targetCol, targetRow);
+    if (!result.success) {
+      return false;
+    }
+
+    this.clearSelection();
+    this.renderPieces();
+    this.renderHud();
+
+    if (result.winStatus && result.winStatus !== 'playing') {
+      this.showResult();
+    }
+
+    return true;
+  }
+
+  private selectPiece(piece: Animal): void {
+    this.gameState.selectedAnimalId = piece.id;
+    this.gameState.validMoves = getValidMoves(this.gameState, piece);
+    this.renderPieces();
+    this.renderHighlights();
+  }
+
+  private clearSelection(): void {
+    this.gameState.selectedAnimalId = undefined;
+    this.gameState.validMoves = undefined;
+    this.clearHighlights();
+    this.renderPieces();
+    this.renderHud();
+  }
+
+  private clearHighlights(): void {
+    this.highlightRects.forEach((rect) => rect.destroy());
+    this.highlightRects = [];
+  }
+
+  private renderHighlights(): void {
+    this.clearHighlights();
+    const moves = this.gameState.validMoves ?? [];
+
+    moves.forEach(({ col, row }) => {
+      const rect = this.add.rectangle(
         BOARD_OFFSET_X + col * CELL_SIZE + CELL_SIZE / 2,
         BOARD_OFFSET_Y + row * CELL_SIZE + CELL_SIZE / 2,
-        CELL_SIZE - 10,
-        CELL_SIZE - 10,
-        0x22c55e
-      ).setOrigin(0.5).setAlpha(0.5);
+        CELL_SIZE - 16,
+        CELL_SIZE - 16,
+        0x22c55e,
+        0.24
+      );
+      rect.setStrokeStyle(2, 0x22c55e, 0.9);
+      this.highlightRects.push(rect);
     });
   }
 
-  private attemptMove(targetCol: number, targetRow: number): void {
-    const animal = this.gameState.animals[this.selectedAnimalId!];
-    if (!animal) return;
+  private renderPieces(): void {
+    this.pieceSprites.forEach((sprite) => sprite.destroy());
+    this.pieceSprites.clear();
 
-    const result = this.makeMove(animal, targetCol, targetRow);
-    
-    if (result.success) {
-      this.lastMoveTime = Date.now();
-      this.scene.restart();
-      
-      const winStatus = checkWinCondition(this.gameState);
-      if (winStatus !== 'playing') {
-        this.showWinMessage(winStatus);
+    Object.values(this.gameState.animals).forEach((piece) => {
+      const isSelected = this.gameState.selectedAnimalId === piece.id;
+      const label = piece.hidden ? '◆' : ANIMAL_SYMBOLS[piece.name] ?? '●';
+
+      const sprite = this.add.text(
+        BOARD_OFFSET_X + piece.col * CELL_SIZE + CELL_SIZE / 2,
+        BOARD_OFFSET_Y + piece.row * CELL_SIZE + CELL_SIZE / 2,
+        label,
+        {
+          fontSize: piece.hidden ? '40px' : '38px',
+          color: piece.hidden ? '#e2e8f0' : COLOR_HEX[piece.color],
+          fontFamily: 'Arial',
+          backgroundColor: piece.hidden ? '#334155' : '#0f172a',
+          padding: { x: 12, y: 8 }
+        }
+      );
+
+      sprite.setOrigin(0.5);
+      sprite.setDepth(2);
+
+      if (isSelected) {
+        sprite.setStroke('#facc15', 3);
       }
-    }
-  }
 
-  private makeMove(animal: Animal, targetCol: number, targetRow: number): MoveResult {
-    if (!isValidMove(this.gameState, animal, targetCol, targetRow)) {
-      return { success: false, reason: 'Invalid move', gameState: this.gameState };
-    }
-
-    const capturedAnimal = this.getAnimalAtCell(targetCol, targetRow);
-    
-    animal.col = targetCol;
-    animal.row = targetRow;
-    this.gameState.animals[animal.id] = animal;
-    this.gameState.currentPlayer = switchPlayer(this.gameState.currentPlayer);
-    
-    const sprite = this.animalSprites.get(animal.id);
-    if (sprite) {
-      this.tweens.add({
-        targets: sprite,
-        x: BOARD_OFFSET_X + targetCol * CELL_SIZE + CELL_SIZE / 2,
-        y: BOARD_OFFSET_Y + targetRow * CELL_SIZE + CELL_SIZE / 2,
-        duration: 200,
-        ease: 'Power2'
-      });
-    }
-    
-    if (capturedAnimal) {
-      this.animalSprites.get(capturedAnimal.id)?.destroy();
-      delete this.gameState.animals[capturedAnimal.id];
-    }
-    
-    return { success: true, gameState: this.gameState, capturedAnimal };
-  }
-
-  private getAnimalAtCell(col: number, row: number): Animal | undefined {
-    return Object.values(this.gameState.animals).find(a => a.col === col && a.row === row);
-  }
-
-  private updateGameStatus(): void {
-    this.currentPlayerIndicator.setText(`Current Player: ${this.gameState.currentPlayer}`);
-    this.statusText.setText(`Game Status: ${this.gameState.status}`);
-  }
-
-  private showWinMessage(status: string): void {
-    const message = status === 'blue_won' ? 'Blue player wins!' : 
-                    status === 'red_won' ? 'Red player wins!' : 'Game over';
-    
-    this.add.text(
-      500, 325,
-      message,
-      { fontSize: '32px', color: '#10b981', fontFamily: 'Arial', backgroundColor: '#1f2937', padding: { x: 20, y: 10 } }
-    ).setOrigin(0.5).setDepth(10);
-    
-    const restartButton = this.add.text(
-      500, 375,
-      'Play Again',
-      { fontSize: '24px', color: '#3b82f6', fontFamily: 'Arial' }
-    ).setOrigin(0.5).setInteractive();
-    
-    restartButton.on('pointerdown', () => {
-      this.scene.restart();
+      this.pieceSprites.set(piece.id, sprite);
     });
+
+    this.renderHighlights();
   }
 
-  update(): void {}
+  private renderHud(): void {
+    const currentColor = getCurrentPlayerColor(this.gameState);
+    const p1Color = this.gameState.playerColors.player1;
+    const p2Color = this.gameState.playerColors.player2;
+
+    this.turnText.setText(`Turn: ${PLAYER_LABEL[this.gameState.currentTurn]}`);
+
+    if (!p1Color || !p2Color) {
+      this.roleText.setText('Opening phase: flip any face-down piece to assign colors');
+    } else {
+      this.roleText.setText(`Player 1 = ${p1Color.toUpperCase()}  |  Player 2 = ${p2Color.toUpperCase()}`);
+    }
+
+    const blueLeft = Object.values(this.gameState.animals).filter((a) => a.color === 'blue').length;
+    const redLeft = Object.values(this.gameState.animals).filter((a) => a.color === 'red').length;
+    const hiddenLeft = Object.values(this.gameState.animals).filter((a) => a.hidden).length;
+
+    const phaseHint = currentColor
+      ? `Current side: ${currentColor.toUpperCase()} | Blue: ${blueLeft}  Red: ${redLeft}  Hidden: ${hiddenLeft}`
+      : `Blue: ${blueLeft}  Red: ${redLeft}  Hidden: ${hiddenLeft}`;
+
+    this.infoText.setText(phaseHint);
+    this.actionText.setText(this.gameState.lastAction ?? 'Tip: Flip first, then move your own revealed pieces.');
+  }
+
+  private showResult(): void {
+    const winner = this.gameState.status === 'blue_won' ? 'BLUE wins!' : 'RED wins!';
+
+    const panel = this.add.rectangle(500, 340, 460, 220, 0x0f172a, 0.94);
+    panel.setStrokeStyle(3, 0x38bdf8, 0.8);
+    panel.setDepth(20);
+
+    const title = this.add.text(500, 290, winner, {
+      fontSize: '42px',
+      color: '#22d3ee',
+      fontFamily: 'Arial'
+    });
+    title.setOrigin(0.5);
+    title.setDepth(21);
+
+    const replay = this.add.text(500, 350, 'Play Again', {
+      fontSize: '30px',
+      color: '#f8fafc',
+      fontFamily: 'Arial',
+      backgroundColor: '#2563eb',
+      padding: { x: 14, y: 8 }
+    });
+    replay.setOrigin(0.5);
+    replay.setDepth(21);
+    replay.setInteractive({ useHandCursor: true });
+    replay.on('pointerdown', () => this.scene.restart());
+
+    const menu = this.add.text(500, 402, 'Back to Menu', {
+      fontSize: '24px',
+      color: '#0f172a',
+      fontFamily: 'Arial',
+      backgroundColor: '#e2e8f0',
+      padding: { x: 10, y: 6 }
+    });
+    menu.setOrigin(0.5);
+    menu.setDepth(21);
+    menu.setInteractive({ useHandCursor: true });
+    menu.on('pointerdown', () => this.scene.start('DouShouQiMainMenuScene'));
+  }
 }

@@ -2,19 +2,26 @@ import { describe, expect, it } from 'vitest';
 import {
   BOARD_COLS,
   BOARD_ROWS,
-  INITIAL_ANIMALS,
+  canCapture,
   checkWinCondition,
   createInitialGameState,
+  flipAnimal,
   getValidMoves,
-  isValidMove
+  hasAnyLegalAction,
+  isValidMove,
+  moveAnimal
 } from './gameData';
 import { Animal, GameState, PlayerColor } from './types';
 
 function createEmptyState(): GameState {
-  const state = createInitialGameState();
+  const state = createInitialGameState(() => 0.5);
   state.animals = {};
-  state.currentPlayer = 'blue';
+  state.currentTurn = 'player1';
+  state.playerColors = { player1: 'blue', player2: 'red' };
   state.status = 'playing';
+  state.selectedAnimalId = undefined;
+  state.validMoves = undefined;
+  state.lastAction = undefined;
   return state;
 }
 
@@ -25,231 +32,137 @@ function placeAnimal(
   rank: number,
   color: PlayerColor,
   col: number,
-  row: number
+  row: number,
+  hidden = false
 ): Animal {
-  const animal: Animal = { id, name, rank, color, col, row };
+  const animal: Animal = { id, name, rank, color, col, row, hidden };
   state.animals[id] = animal;
   return animal;
 }
 
-function toCoordSet(coords: { col: number; row: number }[]): Set<string> {
-  return new Set(coords.map(({ col, row }) => `${col},${row}`));
-}
+describe('dark setup', () => {
+  it('creates a 4x4 board with 16 hidden pieces in unique cells', () => {
+    const state = createInitialGameState(() => 0.42);
+    expect(state.board).toHaveLength(BOARD_ROWS);
+    expect(state.board[0]).toHaveLength(BOARD_COLS);
 
-function collectTerrainCoords(
-  state: GameState,
-  type: 'river' | 'trap' | 'den',
-  owner?: PlayerColor
-): Set<string> {
-  const coords = new Set<string>();
+    const animals = Object.values(state.animals);
+    expect(animals).toHaveLength(16);
+    expect(animals.every((a) => a.hidden)).toBe(true);
 
-  for (let row = 0; row < BOARD_ROWS; row++) {
-    for (let col = 0; col < BOARD_COLS; col++) {
-      const cell = state.board[row][col];
-      if (cell.type === type && (owner === undefined || cell.owner === owner)) {
-        coords.add(`${col},${row}`);
-      }
-    }
-  }
-
-  return coords;
-}
-
-describe('board configuration', () => {
-  it('uses exactly the standard two-river coordinate set', () => {
-    const state = createInitialGameState();
-    const expected = toCoordSet([
-      { col: 1, row: 3 }, { col: 2, row: 3 }, { col: 4, row: 3 }, { col: 5, row: 3 },
-      { col: 1, row: 4 }, { col: 2, row: 4 }, { col: 4, row: 4 }, { col: 5, row: 4 },
-      { col: 1, row: 5 }, { col: 2, row: 5 }, { col: 4, row: 5 }, { col: 5, row: 5 }
-    ]);
-    const actual = collectTerrainCoords(state, 'river');
-
-    expect(actual).toEqual(expected);
-    expect(actual.size).toBe(12);
+    const coordSet = new Set(animals.map((a) => `${a.col},${a.row}`));
+    expect(coordSet.size).toBe(16);
   });
 
-  it('uses standard den and trap coordinates', () => {
-    const state = createInitialGameState();
-    const expectedRedDen = toCoordSet([{ col: 3, row: 0 }]);
-    const expectedBlueDen = toCoordSet([{ col: 3, row: 8 }]);
-    const expectedRedTraps = toCoordSet([{ col: 2, row: 0 }, { col: 3, row: 1 }, { col: 4, row: 0 }]);
-    const expectedBlueTraps = toCoordSet([{ col: 2, row: 8 }, { col: 3, row: 7 }, { col: 4, row: 8 }]);
+  it('first reveal assigns colors by flipped piece and switches turn', () => {
+    const state = createInitialGameState(() => 0.11);
+    const firstId = Object.keys(state.animals)[0];
+    const firstColor = state.animals[firstId].color;
 
-    expect(collectTerrainCoords(state, 'den', 'red')).toEqual(expectedRedDen);
-    expect(collectTerrainCoords(state, 'den', 'blue')).toEqual(expectedBlueDen);
-    expect(collectTerrainCoords(state, 'trap', 'red')).toEqual(expectedRedTraps);
-    expect(collectTerrainCoords(state, 'trap', 'blue')).toEqual(expectedBlueTraps);
-    expect(collectTerrainCoords(state, 'den').size).toBe(2);
-    expect(collectTerrainCoords(state, 'trap').size).toBe(6);
+    const res = flipAnimal(state, firstId);
+    expect(res.success).toBe(true);
+    expect(state.playerColors.player1).toBe(firstColor);
+    expect(state.playerColors.player2).toBe(firstColor === 'blue' ? 'red' : 'blue');
+    expect(state.currentTurn).toBe('player2');
   });
 
-  it('uses the expected standard starting piece layout', () => {
-    const expectedPositions: Record<string, string> = {
-      'blue-elephant': '0,6',
-      'blue-lion': '6,8',
-      'blue-tiger': '0,8',
-      'blue-leopard': '4,6',
-      'blue-dog': '5,7',
-      'blue-wolf': '2,6',
-      'blue-cat': '1,7',
-      'blue-mouse': '6,6',
-      'red-elephant': '6,2',
-      'red-lion': '0,0',
-      'red-tiger': '6,0',
-      'red-leopard': '2,2',
-      'red-dog': '1,1',
-      'red-wolf': '4,2',
-      'red-cat': '5,1',
-      'red-mouse': '0,2'
-    };
+  it('second reveal does not change assigned colors', () => {
+    const state = createInitialGameState(() => 0.11);
+    const ids = Object.keys(state.animals);
 
-    expect(INITIAL_ANIMALS).toHaveLength(16);
-    for (const animal of INITIAL_ANIMALS) {
-      expect(`${animal.col},${animal.row}`).toBe(expectedPositions[animal.id]);
-    }
+    flipAnimal(state, ids[0]);
+    const assigned = { ...state.playerColors };
+    flipAnimal(state, ids[1]);
+
+    expect(state.playerColors).toEqual(assigned);
   });
 });
 
-describe('movement rules', () => {
-  it('disallows non-mouse movement into river', () => {
+describe('movement and capture', () => {
+  it('does not allow moving hidden pieces', () => {
     const state = createEmptyState();
-    const dog = placeAnimal(state, 'blue-dog', 'Dog', 4, 'blue', 0, 3);
-    expect(isValidMove(state, dog, 1, 3)).toBe(false);
+    const piece = placeAnimal(state, 'b-cat', 'Cat', 2, 'blue', 1, 1, true);
+    expect(isValidMove(state, piece, 1, 2)).toBe(false);
   });
 
-  it('allows mouse movement into river', () => {
+  it('allows one-step orthogonal move to empty cell', () => {
     const state = createEmptyState();
-    const mouse = placeAnimal(state, 'blue-mouse', 'Mouse', 1, 'blue', 0, 3);
-    expect(isValidMove(state, mouse, 1, 3)).toBe(true);
+    const piece = placeAnimal(state, 'b-dog', 'Dog', 4, 'blue', 1, 1);
+    expect(isValidMove(state, piece, 1, 2)).toBe(true);
+
+    const result = moveAnimal(state, piece.id, 1, 2);
+    expect(result.success).toBe(true);
+    expect(state.animals[piece.id].col).toBe(1);
+    expect(state.animals[piece.id].row).toBe(2);
+    expect(state.currentTurn).toBe('player2');
   });
 
-  it('disallows entering own den and allows entering opponent den', () => {
+  it('blocks diagonal moves', () => {
     const state = createEmptyState();
-    const blueCat = placeAnimal(state, 'blue-cat', 'Cat', 2, 'blue', 3, 7);
-    const redCat = placeAnimal(state, 'red-cat', 'Cat', 2, 'red', 3, 1);
-
-    expect(isValidMove(state, blueCat, 3, 8)).toBe(false);
-    expect(isValidMove(state, redCat, 3, 0)).toBe(false);
-
-    expect(isValidMove(state, blueCat, 3, 6)).toBe(true);
-    expect(isValidMove(state, redCat, 3, 2)).toBe(true);
+    const piece = placeAnimal(state, 'b-wolf', 'Wolf', 3, 'blue', 1, 1);
+    expect(isValidMove(state, piece, 2, 2)).toBe(false);
   });
 
-  it('enforces one-step orthogonal movement for normal moves', () => {
+  it('cannot capture a hidden piece', () => {
     const state = createEmptyState();
-    const cat = placeAnimal(state, 'blue-cat', 'Cat', 2, 'blue', 3, 2);
+    const attacker = placeAnimal(state, 'b-lion', 'Lion', 7, 'blue', 1, 1);
+    placeAnimal(state, 'r-cat', 'Cat', 2, 'red', 1, 2, true);
 
-    expect(isValidMove(state, cat, 4, 2)).toBe(true);
-    expect(isValidMove(state, cat, 4, 3)).toBe(false);
-    expect(isValidMove(state, cat, 3, 4)).toBe(false);
+    expect(isValidMove(state, attacker, 1, 2)).toBe(false);
   });
-});
 
-describe('lion and tiger jump rules', () => {
-  it('allows a horizontal lion jump when river path is clear', () => {
+  it('enforces rank capture for revealed enemy', () => {
     const state = createEmptyState();
-    const lion = placeAnimal(state, 'blue-lion', 'Lion', 7, 'blue', 0, 3);
-    expect(isValidMove(state, lion, 3, 3)).toBe(true);
+    const attacker = placeAnimal(state, 'b-dog', 'Dog', 4, 'blue', 1, 1);
+    placeAnimal(state, 'r-wolf', 'Wolf', 3, 'red', 1, 2);
+
+    expect(isValidMove(state, attacker, 1, 2)).toBe(true);
   });
 
-  it('allows a vertical tiger jump when river path is clear', () => {
+  it('blocks lower-rank capture on higher-rank piece', () => {
     const state = createEmptyState();
-    const tiger = placeAnimal(state, 'blue-tiger', 'Tiger', 6, 'blue', 1, 2);
-    expect(isValidMove(state, tiger, 1, 6)).toBe(true);
+    const low = placeAnimal(state, 'b-cat', 'Cat', 2, 'blue', 1, 1);
+    placeAnimal(state, 'r-tiger', 'Tiger', 6, 'red', 1, 2);
+
+    expect(isValidMove(state, low, 1, 2)).toBe(false);
   });
 
-  it.each([
-    { blockerRow: 3 },
-    { blockerRow: 4 },
-    { blockerRow: 5 }
-  ])('blocks jump when a mouse sits in crossed river square row $blockerRow', ({ blockerRow }) => {
+  it('applies mouse-elephant special capture rule', () => {
+    const mouse = placeAnimal(createEmptyState(), 'b-mouse', 'Mouse', 1, 'blue', 0, 0);
+    const elephant = placeAnimal(createEmptyState(), 'r-elephant', 'Elephant', 8, 'red', 0, 1);
+
+    expect(canCapture(mouse, elephant)).toBe(true);
+    expect(canCapture(elephant, mouse)).toBe(false);
+  });
+
+  it('returns valid orthogonal moves only', () => {
     const state = createEmptyState();
-    const tiger = placeAnimal(state, 'blue-tiger', 'Tiger', 6, 'blue', 1, 2);
-    placeAnimal(state, `red-mouse-${blockerRow}`, 'Mouse', 1, 'red', 1, blockerRow);
+    const piece = placeAnimal(state, 'b-leopard', 'Leopard', 5, 'blue', 1, 1);
+    const moves = getValidMoves(state, piece).map((m) => `${m.col},${m.row}`);
 
-    expect(isValidMove(state, tiger, 1, 6)).toBe(false);
-  });
-
-  it('disallows jump landing on own piece and allows legal jump capture', () => {
-    const ownBlockedState = createEmptyState();
-    const ownLion = placeAnimal(ownBlockedState, 'blue-lion', 'Lion', 7, 'blue', 0, 3);
-    placeAnimal(ownBlockedState, 'blue-cat', 'Cat', 2, 'blue', 3, 3);
-    expect(isValidMove(ownBlockedState, ownLion, 3, 3)).toBe(false);
-
-    const captureState = createEmptyState();
-    const captureLion = placeAnimal(captureState, 'blue-lion', 'Lion', 7, 'blue', 0, 3);
-    placeAnimal(captureState, 'red-dog', 'Dog', 4, 'red', 3, 3);
-    expect(isValidMove(captureState, captureLion, 3, 3)).toBe(true);
-  });
-
-  it('includes jump squares in generated valid moves', () => {
-    const state = createEmptyState();
-    const lion = placeAnimal(state, 'blue-lion', 'Lion', 7, 'blue', 0, 3);
-    const moves = getValidMoves(state, lion);
-
-    expect(moves).toContainEqual({ col: 3, row: 3 });
-  });
-});
-
-describe('capture rules', () => {
-  it('enforces base rank capture hierarchy', () => {
-    const state = createEmptyState();
-    const dog = placeAnimal(state, 'blue-dog', 'Dog', 4, 'blue', 2, 2);
-    const wolf = placeAnimal(state, 'red-wolf', 'Wolf', 3, 'red', 3, 2);
-
-    expect(isValidMove(state, dog, 3, 2)).toBe(true);
-    expect(isValidMove(state, wolf, 2, 2)).toBe(false);
-
-    const equalState = createEmptyState();
-    const blueCat = placeAnimal(equalState, 'blue-cat', 'Cat', 2, 'blue', 2, 2);
-    placeAnimal(equalState, 'red-cat', 'Cat', 2, 'red', 3, 2);
-    expect(isValidMove(equalState, blueCat, 3, 2)).toBe(true);
-  });
-
-  it('allows mouse capture of elephant from land and blocks elephant capture of mouse', () => {
-    const state = createEmptyState();
-    const mouse = placeAnimal(state, 'blue-mouse', 'Mouse', 1, 'blue', 0, 0);
-    const elephant = placeAnimal(state, 'red-elephant', 'Elephant', 8, 'red', 1, 0);
-
-    expect(isValidMove(state, mouse, 1, 0)).toBe(true);
-    expect(isValidMove(state, elephant, 0, 0)).toBe(false);
-  });
-
-  it('blocks river-to-land captures for mouse', () => {
-    const state = createEmptyState();
-    const mouse = placeAnimal(state, 'blue-mouse', 'Mouse', 1, 'blue', 1, 3);
-    placeAnimal(state, 'red-elephant', 'Elephant', 8, 'red', 1, 2);
-
-    expect(isValidMove(state, mouse, 1, 2)).toBe(false);
-  });
-
-  it('applies trap weakening for defender in attacker-owned trap', () => {
-    const trapState = createEmptyState();
-    const cat = placeAnimal(trapState, 'blue-cat', 'Cat', 2, 'blue', 2, 7);
-    placeAnimal(trapState, 'red-elephant', 'Elephant', 8, 'red', 2, 8);
-    expect(isValidMove(trapState, cat, 2, 8)).toBe(true);
-
-    const normalState = createEmptyState();
-    const normalCat = placeAnimal(normalState, 'blue-cat', 'Cat', 2, 'blue', 2, 7);
-    placeAnimal(normalState, 'red-elephant', 'Elephant', 8, 'red', 2, 6);
-    expect(isValidMove(normalState, normalCat, 2, 6)).toBe(false);
+    expect(moves.sort()).toEqual(['0,1', '1,0', '1,2', '2,1']);
   });
 });
 
 describe('win conditions', () => {
-  it('awards win for entering opponent den', () => {
+  it('wins when one color has no remaining pieces', () => {
     const state = createEmptyState();
-    placeAnimal(state, 'blue-cat', 'Cat', 2, 'blue', 3, 0);
-    placeAnimal(state, 'red-cat', 'Cat', 2, 'red', 0, 8);
-
+    placeAnimal(state, 'b-cat', 'Cat', 2, 'blue', 0, 0);
     expect(checkWinCondition(state)).toBe('blue_won');
   });
 
-  it('awards win when opponent has no pieces', () => {
+  it('wins when current turn has no legal action and no hidden pieces', () => {
     const state = createEmptyState();
-    placeAnimal(state, 'blue-cat', 'Cat', 2, 'blue', 0, 0);
+    state.currentTurn = 'player1';
 
-    expect(checkWinCondition(state)).toBe('blue_won');
+    // Blue has only one Elephant in corner.
+    // Adjacent cells are occupied by red Mouse pieces.
+    // Elephant cannot capture Mouse, so Player 1 has no legal action.
+    placeAnimal(state, 'b-elephant', 'Elephant', 8, 'blue', 0, 0);
+    placeAnimal(state, 'r-mouse-1', 'Mouse', 1, 'red', 1, 0);
+    placeAnimal(state, 'r-mouse-2', 'Mouse', 1, 'red', 0, 1);
+
+    expect(hasAnyLegalAction(state, 'player1')).toBe(false);
+    expect(checkWinCondition(state)).toBe('red_won');
   });
 });

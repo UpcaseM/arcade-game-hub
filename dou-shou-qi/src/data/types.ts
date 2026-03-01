@@ -1,5 +1,6 @@
 export type PlayerColor = 'blue' | 'red';
-export type GameStatus = 'playing' | 'blue_won' | 'red_won' | 'blue_resigned' | 'red_resigned';
+export type PlayerTurn = 'player1' | 'player2';
+export type GameStatus = 'playing' | 'blue_won' | 'red_won';
 
 export interface Animal {
   id: string;
@@ -8,22 +9,27 @@ export interface Animal {
   color: PlayerColor;
   col: number;
   row: number;
+  hidden: boolean;
 }
 
 export interface BoardCell {
   col: number;
   row: number;
-  type: 'land' | 'river' | 'den' | 'trap';
-  owner?: PlayerColor;
+  type: 'land';
 }
 
 export interface GameState {
   board: BoardCell[][];
   animals: Record<string, Animal>;
-  currentPlayer: PlayerColor;
+  currentTurn: PlayerTurn;
+  playerColors: {
+    player1?: PlayerColor;
+    player2?: PlayerColor;
+  };
   status: GameStatus;
   selectedAnimalId?: string;
   validMoves?: { col: number; row: number }[];
+  lastAction?: string;
 }
 
 export interface Move {
@@ -56,5 +62,6 @@ export interface MoveResult {
   reason?: string;
   gameState: GameState;
   capturedAnimal?: Animal;
+  flippedAnimal?: Animal;
   winStatus?: GameStatus;
 }
