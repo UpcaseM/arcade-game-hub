@@ -74,9 +74,8 @@ function showScreen(name) {
     }
   }
 
-    if (snakeRunning && snakePaused && !snakeGameOver) {
-      toggleSnakePause(false);
-    }
+  if (snakeRunning && snakePaused && !snakeGameOver) {
+    toggleSnakePause(false);
   }
 }
 

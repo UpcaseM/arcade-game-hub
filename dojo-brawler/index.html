@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dojo Brawler</title>
+  <link rel="stylesheet" href="game.css">
+</head>
+<body>
+  <main class="game-shell">
+    <header class="topbar">
+      <button id="backToHubBtn" class="ghost-btn" type="button">← Back to Hub</button>
+      <h1>Dojo Brawler</h1>
+      <p>Move, strike, and outlast the rival bot in the arena.</p>
+    </header>
+
+    <section class="hud" aria-label="health bars">
+      <div class="hp-group">
+        <div class="hp-label-row">
+          <span>Player</span>
+          <strong id="playerHpText">100 / 100</strong>
+        </div>
+        <div class="hp-track"><div id="playerHpFill" class="hp-fill player"></div></div>
+      </div>
+      <div class="hp-group">
+        <div class="hp-label-row">
+          <span>Enemy</span>
+          <strong id="enemyHpText">100 / 100</strong>
+        </div>
+        <div class="hp-track"><div id="enemyHpFill" class="hp-fill enemy"></div></div>
+      </div>
+    </section>
+
+    <section class="arena-wrap">
+      <canvas id="fightCanvas" width="960" height="540" aria-label="Dojo brawler arena"></canvas>
+      <div id="resultOverlay" class="result-overlay hidden" aria-live="polite">
+        <h2 id="resultTitle">You Win</h2>
+        <p id="resultText">Reset to fight again.</p>
+        <div class="overlay-actions">
+          <button id="restartBtn" type="button">Restart</button>
+          <button id="overlayBackBtn" type="button" class="ghost-btn">Back to Hub</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="controls" aria-label="controls">
+      <p><strong>Desktop:</strong> Move with <kbd>WASD</kbd> or <kbd>Arrow keys</kbd>, attack with <kbd>Space</kbd>, <kbd>J</kbd>, or <kbd>K</kbd>.</p>
+      <p><strong>Mobile:</strong> Drag the left joystick and tap/hold the attack button.</p>
+    </section>
+
+    <section class="mobile-controls" aria-label="touch controls">
+      <div id="joystickPad" class="joystick-pad">
+        <div class="joystick-base"></div>
+        <div id="joystickKnob" class="joystick-knob"></div>
+      </div>
+      <button id="attackBtn" type="button" class="attack-btn">Attack</button>
+    </section>
+
+    <footer class="credit-note">
+      Uses Kenney Space Shooter Extension assets (CC0 1.0). See <code>dojo-brawler/assets/kenney/license/</code>.
+    </footer>
+  </main>
+
+  <script src="game.js" defer></script>
+</body>
+</html>
