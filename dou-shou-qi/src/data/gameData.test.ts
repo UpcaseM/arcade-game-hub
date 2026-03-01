@@ -2,11 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   BOARD_COLS,
   BOARD_ROWS,
-  DEN_POSITIONS,
   INITIAL_ANIMALS,
-  RIVER_POSITIONS,
-  TRAP_POSITIONS_BLUE,
-  TRAP_POSITIONS_RED,
   checkWinCondition,
   createInitialGameState,
   getValidMoves,
@@ -40,19 +36,34 @@ function toCoordSet(coords: { col: number; row: number }[]): Set<string> {
   return new Set(coords.map(({ col, row }) => `${col},${row}`));
 }
 
+function collectTerrainCoords(
+  state: GameState,
+  type: 'river' | 'trap' | 'den',
+  owner?: PlayerColor
+): Set<string> {
+  const coords = new Set<string>();
+
+  for (let row = 0; row < BOARD_ROWS; row++) {
+    for (let col = 0; col < BOARD_COLS; col++) {
+      const cell = state.board[row][col];
+      if (cell.type === type && (owner === undefined || cell.owner === owner)) {
+        coords.add(`${col},${row}`);
+      }
+    }
+  }
+
+  return coords;
+}
+
 describe('board configuration', () => {
   it('uses exactly the standard two-river coordinate set', () => {
     const state = createInitialGameState();
-    const expected = toCoordSet(RIVER_POSITIONS);
-    const actual = new Set<string>();
-
-    for (let row = 0; row < BOARD_ROWS; row++) {
-      for (let col = 0; col < BOARD_COLS; col++) {
-        if (state.board[row][col].type === 'river') {
-          actual.add(`${col},${row}`);
-        }
-      }
-    }
+    const expected = toCoordSet([
+      { col: 1, row: 3 }, { col: 2, row: 3 }, { col: 4, row: 3 }, { col: 5, row: 3 },
+      { col: 1, row: 4 }, { col: 2, row: 4 }, { col: 4, row: 4 }, { col: 5, row: 4 },
+      { col: 1, row: 5 }, { col: 2, row: 5 }, { col: 4, row: 5 }, { col: 5, row: 5 }
+    ]);
+    const actual = collectTerrainCoords(state, 'river');
 
     expect(actual).toEqual(expected);
     expect(actual.size).toBe(12);
@@ -60,16 +71,17 @@ describe('board configuration', () => {
 
   it('uses standard den and trap coordinates', () => {
     const state = createInitialGameState();
-    expect(state.board[DEN_POSITIONS.red.row][DEN_POSITIONS.red.col]).toMatchObject({ type: 'den', owner: 'red' });
-    expect(state.board[DEN_POSITIONS.blue.row][DEN_POSITIONS.blue.col]).toMatchObject({ type: 'den', owner: 'blue' });
+    const expectedRedDen = toCoordSet([{ col: 3, row: 0 }]);
+    const expectedBlueDen = toCoordSet([{ col: 3, row: 8 }]);
+    const expectedRedTraps = toCoordSet([{ col: 2, row: 0 }, { col: 3, row: 1 }, { col: 4, row: 0 }]);
+    const expectedBlueTraps = toCoordSet([{ col: 2, row: 8 }, { col: 3, row: 7 }, { col: 4, row: 8 }]);
 
-    for (const trap of TRAP_POSITIONS_RED) {
-      expect(state.board[trap.row][trap.col]).toMatchObject({ type: 'trap', owner: 'red' });
-    }
-
-    for (const trap of TRAP_POSITIONS_BLUE) {
-      expect(state.board[trap.row][trap.col]).toMatchObject({ type: 'trap', owner: 'blue' });
-    }
+    expect(collectTerrainCoords(state, 'den', 'red')).toEqual(expectedRedDen);
+    expect(collectTerrainCoords(state, 'den', 'blue')).toEqual(expectedBlueDen);
+    expect(collectTerrainCoords(state, 'trap', 'red')).toEqual(expectedRedTraps);
+    expect(collectTerrainCoords(state, 'trap', 'blue')).toEqual(expectedBlueTraps);
+    expect(collectTerrainCoords(state, 'den').size).toBe(2);
+    expect(collectTerrainCoords(state, 'trap').size).toBe(6);
   });
 
   it('uses the expected standard starting piece layout', () => {
