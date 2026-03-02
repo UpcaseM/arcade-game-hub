@@ -44,6 +44,12 @@ function trimDisplay(value: string, max = 60): string {
 export class DouShouQiMainMenuScene extends Phaser.Scene {
   private roomListTexts: Phaser.GameObjects.Text[] = [];
   private roomsContainer?: Phaser.GameObjects.Container;
+  private allRooms: LobbyRoomSummary[] = [];
+  private roomPage = 0;
+  private readonly roomPageSize = 7;
+  private prevRoomsButton?: Phaser.GameObjects.Text;
+  private nextRoomsButton?: Phaser.GameObjects.Text;
+  private roomPageText?: Phaser.GameObjects.Text;
   private defaultName = 'Guest';
   private focusedField: InputField | null = null;
   private nameField?: InputField;
@@ -174,6 +180,13 @@ export class DouShouQiMainMenuScene extends Phaser.Scene {
     }).setOrigin(0.5);
 
     this.roomsContainer = this.add.container(500, 212);
+    this.prevRoomsButton = this.makePageButton(548, 184, 'Prev', -1);
+    this.nextRoomsButton = this.makePageButton(906, 184, 'Next', 1);
+    this.roomPageText = this.add.text(752, 184, 'Page 1/1', {
+      fontFamily: 'Arial',
+      fontSize: '14px',
+      color: '#bbf7d0'
+    }).setOrigin(0.5);
 
     const reducedMotionButton = this.makeToggleButton(80, 560, () => `Reduced Motion: ${settings.reducedMotion ? 'On' : 'Off'}`, () => {
       settings.reducedMotion = !settings.reducedMotion;
@@ -388,21 +401,39 @@ export class DouShouQiMainMenuScene extends Phaser.Scene {
     }
 
     try {
-      const rooms = await onlineSession.listOpenRooms();
-      this.renderRooms(rooms);
+      this.allRooms = await onlineSession.listOpenRooms();
+      this.roomPage = 0;
+      this.renderRoomsPage();
     } catch (error) {
-      this.renderRooms([]);
+      this.allRooms = [];
+      this.roomPage = 0;
+      this.renderRoomsPage();
       this.showToast(`Room refresh failed: ${String(error)}`);
     }
   }
 
-  private renderRooms(rooms: LobbyRoomSummary[]): void {
+  private renderRoomsPage(): void {
     this.roomListTexts.forEach((text) => text.destroy());
     this.roomListTexts = [];
     this.roomsContainer?.removeAll(true);
 
     if (!this.roomsContainer) {
       return;
+    }
+
+    const pageCount = Math.max(1, Math.ceil(this.allRooms.length / this.roomPageSize));
+    this.roomPage = Phaser.Math.Clamp(this.roomPage, 0, pageCount - 1);
+    const startIndex = this.roomPage * this.roomPageSize;
+    const rooms = this.allRooms.slice(startIndex, startIndex + this.roomPageSize);
+    this.roomPageText?.setText(`Page ${this.roomPage + 1}/${pageCount}`);
+
+    if (this.prevRoomsButton) {
+      this.prevRoomsButton.setVisible(pageCount > 1);
+      this.prevRoomsButton.setAlpha(this.roomPage > 0 ? 1 : 0.5);
+    }
+    if (this.nextRoomsButton) {
+      this.nextRoomsButton.setVisible(pageCount > 1);
+      this.nextRoomsButton.setAlpha(this.roomPage < pageCount - 1 ? 1 : 0.5);
     }
 
     if (rooms.length === 0) {
@@ -417,7 +448,7 @@ export class DouShouQiMainMenuScene extends Phaser.Scene {
       return;
     }
 
-    rooms.slice(0, 7).forEach((room, index) => {
+    rooms.forEach((room, index) => {
       const y = index * 56;
       const roomText = this.add.text(0, y, `${room.locked ? '[LOCK]' : '[OPEN]'} ${room.hostName}  ·  Room ${room.id}`, {
         fontFamily: 'Arial',
@@ -441,6 +472,29 @@ export class DouShouQiMainMenuScene extends Phaser.Scene {
       this.roomsContainer?.add(joinButton);
       this.roomListTexts.push(roomText, joinButton);
     });
+  }
+
+  private makePageButton(x: number, y: number, label: string, delta: number): Phaser.GameObjects.Text {
+    const button = this.add.text(x, y, label, {
+      fontFamily: 'Arial',
+      fontSize: '14px',
+      color: '#052e16',
+      backgroundColor: '#86efac',
+      padding: { x: 8, y: 4 }
+    }).setOrigin(0.5);
+
+    button.setInteractive({ useHandCursor: true });
+    button.on('pointerdown', () => {
+      const pageCount = Math.max(1, Math.ceil(this.allRooms.length / this.roomPageSize));
+      const nextPage = Phaser.Math.Clamp(this.roomPage + delta, 0, pageCount - 1);
+      if (nextPage === this.roomPage) {
+        return;
+      }
+      this.roomPage = nextPage;
+      this.renderRoomsPage();
+    });
+
+    return button;
   }
 
   private async joinRoom(room: LobbyRoomSummary): Promise<void> {

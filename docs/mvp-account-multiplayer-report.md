@@ -66,17 +66,18 @@ python3 -m http.server 8000
 
 4. Device A (host):
 - Open `Dou Shou Qi`.
+- Confirm or edit `Player Name` first (top-left field; prefilled from hub account when available).
+- Optionally fill `Host Room Password (optional)`.
 - Click `Host Room`.
-- Enter `Player Name`.
-- Optionally fill `Host Room Password`.
 - Wait in lobby.
 
 5. Device B (guest):
 - Open `Dou Shou Qi`.
-- In `Open Rooms`, click `Refresh Room List` if needed.
-- Click `Join` on host room.
-- Set `Player Name`.
-- If locked, enter `Join Password` first.
+- Confirm or edit `Player Name` first (top-left field).
+- Click `Refresh Room List` in `Open Rooms`.
+- If there are many rooms, use `Prev/Next` above the list to page through all open rooms.
+- If target room is `[LOCK]`, enter `Join Password (if room is locked)` in the left-side field before joining.
+- Click `Join` on the target room row.
 
 6. Device A:
 - After guest connects, click `Start Match`.
