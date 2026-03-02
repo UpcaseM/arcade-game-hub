@@ -24,19 +24,22 @@ This project intentionally uses **flip mode** (暗棋开局), not the standard 7
 - Click a highlighted target to move/capture
 - Back button returns to the game menu
 
-## Online MVP (Backendless)
+## Online Lobby Flow
 
-- Transport: WebRTC DataChannel with manual signaling (copy/paste offer + answer codes)
-- Authority model: host is authoritative for game state validation and snapshots
-- Roles: host controls `player1`, joiner controls `player2`
-- Sync: host sends snapshots after accepted actions; guest applies snapshots
-- Identity: defaults to hub account username (`arcade_active_user_v1`) when available
-- Reconnect: session reset is available from main menu and supports re-signaling flow
+- Multiplayer uses a room-lobby model: host creates a room and enters a lobby immediately.
+- Guests browse open rooms from a list and join directly (optional room password).
+- Host can start the match only after a guest connects.
+- Authority model: host validates actions and sends snapshots; guest applies snapshots.
+- Roles: host controls `player1`, guest controls `player2`.
+- Identity defaults to hub account username (`arcade_active_user_v1`) when available.
+- Reconnect stays in the same room by publishing a fresh offer/answer version.
 
 ### Limitations
 
 - STUN-only (no TURN): strict NAT/firewall setups may fail to connect.
-- Manual signaling UX is intentionally basic for static-site MVP.
+- Cross-device room listing requires a configured Firebase Realtime Database URL.
+- Without Firebase config, fallback lobby uses local browser storage (same-device only).
+- Room passwords are casual access control (salted hash stored client-side), not strong security.
 - Client authority/security is demo-grade and not anti-cheat hardened.
 
 ## Audio MVP

@@ -18,9 +18,9 @@ const BLUE_IDENTITY: PlayerIdentity = {
   color: 'blue',
   label: 'Azure Side',
   shortLabel: 'AZR',
-  primaryColor: 0x60a5fa,
-  accentColor: 0x0ea5e9,
-  textColor: '#dbeafe',
+  primaryColor: 0x5ec4ff,
+  accentColor: 0x38bdf8,
+  textColor: '#e0f2fe',
   badgeShape: 'circle',
   pattern: 'dots'
 };
@@ -37,15 +37,15 @@ const RED_IDENTITY: PlayerIdentity = {
 };
 
 export const NEUTRAL_COLORS = {
-  panelBg: 0x111827,
-  panelBorder: 0x334155,
-  textPrimary: '#e2e8f0',
-  textSecondary: '#94a3b8',
-  boardBg: 0x0b1220,
-  boardLine: 0x1e293b,
-  boardOuter: 0x334155,
-  hiddenPieceBg: 0x334155,
-  hiddenPieceText: '#f8fafc'
+  panelBg: 0x162417,
+  panelBorder: 0x3f5b3c,
+  textPrimary: '#ecfdf5',
+  textSecondary: '#bbf7d0',
+  boardBg: 0x2a3f24,
+  boardLine: 0x49673f,
+  boardOuter: 0x6b4f30,
+  hiddenPieceBg: 0x425f3b,
+  hiddenPieceText: '#f0fdf4'
 } as const;
 
 export function getPlayerIdentity(color: PlayerColor): PlayerIdentity {

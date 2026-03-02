@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { GameState, PlayerTurn } from '../../data/types';
 import { NEUTRAL_COLORS, PlayerIdentity, getPlayerIdentity } from './theme';
+import { formatTurnIndicator } from './turnIndicator';
 
 const PLAYER_LABEL: Record<PlayerTurn, string> = {
   player1: 'Player 1',
@@ -114,7 +115,12 @@ export class HudView {
 
     const currentColor = gameState.playerColors[gameState.currentTurn];
     const currentIdentity = currentColor ? getPlayerIdentity(currentColor) : undefined;
-    this.chipText.setText(`${PLAYER_LABEL[gameState.currentTurn]} Turn`);
+    this.chipText.setText(formatTurnIndicator(gameState, {
+      mode: meta.mode,
+      localTurn: meta.localTurn,
+      localName: meta.localName,
+      remoteName: meta.remoteName
+    }));
     this.chipBg.setStrokeStyle(2, currentIdentity?.primaryColor ?? 0x475569, 1);
     this.drawChipBadge(currentIdentity);
   }
@@ -187,4 +193,3 @@ export class HudView {
     this.chipBadge.fillCircle(0, 0, 7);
   }
 }
-

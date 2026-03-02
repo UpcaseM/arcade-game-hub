@@ -3,6 +3,7 @@ import { DouShouQiPreloadScene } from "./game/scenes/PreloadScene";
 import { DouShouQiMainMenuScene } from "./game/scenes/MainMenuScene";
 import { DouShouQiGameScene } from "./game/scenes/GameScene";
 import { DouShouQiTutorialScene } from "./game/scenes/TutorialScene";
+import { DouShouQiLobbyScene } from "./game/scenes/LobbyScene";
 
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
@@ -12,9 +13,14 @@ const config: Phaser.Types.Core.GameConfig = {
   scene: [
     DouShouQiPreloadScene,
     DouShouQiMainMenuScene,
+    DouShouQiLobbyScene,
     DouShouQiGameScene,
     DouShouQiTutorialScene
   ],
+  scale: {
+    mode: Phaser.Scale.FIT,
+    autoCenter: Phaser.Scale.CENTER_BOTH
+  },
   physics: {
     default: "arcade",
     arcade: {

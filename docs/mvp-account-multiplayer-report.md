@@ -1,100 +1,84 @@
 # MVP Account + Multiplayer Delivery Report
 
-## Implemented
+## Implemented in this loop
 
-1. Hub account/auth/admin:
-- Added `auth.js` local auth service with:
-  - versioned local store
-  - seeded default admin (`admin` / `admin123`)
-  - PBKDF2-SHA256 salted password hashing (no plaintext password storage)
-  - persisted login session and active user identity mirror
-- Added hub login/logout UI and admin modal UI in `index.html`, `styles.css`, `script.js`.
-- Added admin CRUD actions:
-  - create/update/delete users (`username`, `password`, `role`)
-  - last-admin guard for delete/demote.
-- Added auth docs: `docs/auth-mvp.md`.
-- Added regression tests: `tools/auth.test.mjs`.
+1. Hub auth/UI safety and polish
+- Removed default admin credential hint from the public login modal UI.
+- Kept existing login/logout/admin behavior unchanged.
+- Updated hub styling to a cohesive forest direction and improved spacing/alignment for desktop + mobile.
 
-2. Dou Shou Qi online MVP:
-- Added net protocol + authority helpers:
-  - `dou-shou-qi/src/net/protocol.ts`
-  - `dou-shou-qi/src/net/protocol.test.ts`
-- Added backendless transport:
-  - `dou-shou-qi/src/net/webrtcTransport.ts` (manual offer/answer signaling)
-  - `dou-shou-qi/src/net/onlineSession.ts` (session lifecycle, hello identity, messaging)
-- Menu online flows (`Host Online Room`, `Join Online Room`) with manual copy/paste signaling.
-- Host-authoritative state handling in `GameScene`:
-  - remote action requests validated by host
-  - action acceptance/rejection messaging
-  - host state snapshots broadcast; guest applies snapshots
-  - clear identity/status line (self/opponent/host/guest).
-- In-match reconnect resume:
-  - added reconnect flow directly in active match (`Reconnect` button in `GameScene`)
-  - host/guest perform manual re-signaling without leaving the current match scene
-  - host auto-sends a fresh snapshot every time connection becomes `connected` (initial connect and reconnect), so guest resumes from authoritative state.
+2. Dou Shou Qi multiplayer lobby flow
+- Replaced manual offer/answer prompts from menu with a room-lobby flow.
+- Added lobby data model + store abstraction in `dou-shou-qi/src/net/lobbyStore.ts`.
+- Added provider modes:
+  - Firebase Realtime Database REST mode (cross-device room listing/signaling when configured).
+  - Local browser fallback mode (same-device/local-storage only).
+- Host flow:
+  - Host creates room (optional password), enters lobby immediately.
+  - Lobby shows guest/connect status and enables `Start Match` only when guest channel is connected.
+- Guest flow:
+  - Guest opens room list, sees currently open rooms, and joins by clicking `Join`.
+  - Locked rooms require password.
+- Added lobby scene: `dou-shou-qi/src/game/scenes/LobbyScene.ts`.
 
-3. Audio settings + SFX/BGM:
-- Added procedural audio engine:
-  - `dou-shou-qi/src/game/audio/AudioEngine.ts`
-- Added SFX events for flip/move/capture/win and persistent audio settings.
-- Expanded settings model to include:
-  - `musicVolume`, `sfxVolume`, `musicMuted`, `sfxMuted`.
-- Added in-match settings overlay (no match exit required) with live audio controls:
-  - `Music Mute`, `SFX Mute`, `Music Vol`, `SFX Vol`
-  - applies immediately through `AudioEngine` and persists via `UiSettings`.
+3. Password + reconnect behavior
+- Room password is optional.
+- Password handling stores only `salt + SHA-256 hash` in room metadata (no plaintext storage).
+- Reconnect now reuses the same room and bumps offer/answer version in room metadata.
+- In-game reconnect buttons publish/consume latest room signaling data (no copy/paste prompts).
 
-4. HUD/layout + polish:
-- Refactored Dou Shou Qi HUD to a compact top-bar style (`HudView` rewrite).
-- Improved board visuals (background/tiles/outline) and retained transition/feedback FX.
+4. Start gating and turn clarity
+- Added explicit host-start gate before gameplay.
+- Added `lobbyStart` protocol message and room-start synchronization.
+- Added centralized always-visible top-center turn indicator text with active side + player identity (`You/Opponent` in online mode).
+- Added formatter + tests in `dou-shou-qi/src/game/ui/turnIndicator.ts`.
 
-5. Validation/build/deploy readiness:
-- Updated committed `dou-shou-qi/dist/main.js`.
-- Verified static path safety remains green.
+5. Visual direction and responsiveness
+- Updated Dou Shou Qi menu/lobby/game palette to forest style (greens/wood tones).
+- Updated board styling and UI panel colors for cohesive theme.
+- Enabled Phaser `Scale.FIT + autoCenter` for cleaner mobile/desktop scaling.
+- Updated hub page theme/layout for consistent forest-style polish.
 
-## Deferred / Known Limitations
+## Backendless architecture notes and limitations
 
-1. Online signaling UX:
-- Uses prompts for copy/paste offer/answer, not a rich in-canvas form or QR flow.
+- Core gameplay sync remains peer-to-peer WebRTC DataChannel with host authority.
+- STUN-only transport remains in use; some NAT/firewall combinations can still fail.
+- True cross-device room list requires Firebase RTDB configuration in the menu (`Set Firebase Lobby URL`).
+- If Firebase is not configured, local fallback lobby works only in the same browser/device context.
+- Room password is casual access control, not hardened security.
 
-2. Reconnect robustness:
-- Manual reconnect resume is supported in-match, but there is still no fully automatic reconnect or TURN-based reliability across restrictive NAT/firewall environments.
+## Exact play instructions (2 devices)
 
-3. Security:
-- Auth is explicitly demo-grade local auth only; no backend trust model.
-
-4. NAT traversal:
-- STUN-only, no TURN relay; some mobile networks will fail to connect peer-to-peer.
-
-## Exact Play Instructions
-
-1. Start a static server at repo root:
+1. Start local server at repo root:
 ```bash
 python3 -m http.server 8000
 ```
 
-2. Open hub:
-- `http://localhost:8000/`
+2. Open hub on both devices:
+- `http://<your-host-ip>:8000/`
 
-3. Login/admin:
-- Click `Login`, sign in as `admin` / `admin123`.
-- Click `Admin` to create/update/delete users.
+3. Device A (host):
+- Open `Dou Shou Qi`.
+- Click `Host Room`.
+- Enter name.
+- Optionally enter room password.
+- Wait in lobby.
 
-4. Dou Shou Qi online on 2 devices:
-- Device A: open Dou Shou Qi -> `Host Online Room`.
-- Copy OFFER code and send to Device B.
-- Device B: `Join Online Room`, paste OFFER, copy generated ANSWER back to Device A.
-- Device A: paste ANSWER to complete connection.
-- Start playing; host is `player1`, joiner is `player2`.
-- If disconnected mid-match:
-  - Host taps `Reconnect`, shares the RECONNECT OFFER, then pastes guest RECONNECT ANSWER.
-  - Guest taps `Reconnect`, pastes host RECONNECT OFFER, returns the generated RECONNECT ANSWER.
-  - After channel reopens, guest auto-resyncs from host snapshot (same match continues).
+4. Device B (guest):
+- Open `Dou Shou Qi`.
+- In `Open Rooms`, click `Refresh Room List` if needed.
+- Click `Join` on host room.
+- Enter name and password if room is locked.
 
-5. In-match audio settings:
-- During a match, tap `Settings` (top-right).
-- Adjust music/SFX mute and volumes without leaving the game.
+5. Device A:
+- After guest connects, click `Start Match`.
 
-## Exact Test/Build Commands
+6. Reconnect mid-match (if disconnected):
+- Host presses `Reconnect` (in match or lobby), then guest presses `Reconnect`.
+- Session renegotiates with latest room version.
+- Guest re-syncs to host snapshot when channel reconnects.
+
+## Validation commands run
 
 From repo root:
 ```bash
@@ -107,3 +91,5 @@ From `dou-shou-qi/`:
 npm test
 npm run build
 ```
+
+Note: `npm run lint` currently fails due an existing project ESLint config mismatch (ESLint v9 expects `eslint.config.*`, but this package does not include one).

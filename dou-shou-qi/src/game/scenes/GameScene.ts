@@ -13,7 +13,7 @@ import {
   moveAnimal
 } from '../../data/gameData';
 import { Animal, GameState, PlayerTurn } from '../../data/types';
-import { applyHostAction, cloneState, OnlineActionRequest } from '../../net/protocol';
+import { applyHostAction, cloneState, createOnlineInitialState, createSeededRandom, OnlineActionRequest } from '../../net/protocol';
 import { onlineSession } from '../../net/onlineSession';
 import { AudioEngine } from '../audio/AudioEngine';
 import { HudView } from '../ui/HudView';
@@ -65,21 +65,28 @@ export class DouShouQiGameScene extends Phaser.Scene {
   private settingsSfxMuteText!: Phaser.GameObjects.Text;
   private settingsMusicVolumeText!: Phaser.GameObjects.Text;
   private settingsSfxVolumeText!: Phaser.GameObjects.Text;
+  private matchStarted = true;
 
   constructor() {
     super('DouShouQiGameScene');
   }
 
-  init(data: { mode?: SceneMode }): void {
+  init(data: { mode?: SceneMode; seed?: number; started?: boolean }): void {
     this.mode = data?.mode ?? 'local';
     this.settings = loadUiSettings();
     this.audio = new AudioEngine(this.settings);
     this.actionLocked = false;
-    this.awaitingSnapshot = this.mode === 'online' && onlineSession.getRole() === 'guest';
+    this.matchStarted = this.mode === 'local' ? true : (data?.started ?? onlineSession.hasMatchStarted());
+    this.awaitingSnapshot = this.mode === 'online' && (onlineSession.getRole() === 'guest' || !this.matchStarted);
     this.localTurn = this.mode === 'online' ? onlineSession.localTurn() : 'player1';
-    this.gameState = createInitialGameState();
+    if (this.mode === 'online') {
+      const seededRandom = typeof data?.seed === 'number' ? createSeededRandom(data.seed) : undefined;
+      this.gameState = createOnlineInitialState(seededRandom);
+    } else {
+      this.gameState = createInitialGameState();
+    }
     if (this.awaitingSnapshot) {
-      this.gameState.lastAction = 'Waiting for host snapshot...';
+      this.gameState.lastAction = this.matchStarted ? 'Waiting for host snapshot...' : 'Waiting for host to start match...';
     }
   }
 
@@ -98,18 +105,18 @@ export class DouShouQiGameScene extends Phaser.Scene {
     const width = BOARD_COLS * CELL_SIZE;
     const height = BOARD_ROWS * CELL_SIZE;
 
-    this.boardGraphics.fillGradientStyle(0x0f172a, 0x111827, 0x1e293b, 0x0f172a, 1);
+    this.boardGraphics.fillGradientStyle(0x1c2f1a, 0x253b1f, 0x3a2b1a, 0x1b2d18, 1);
     this.boardGraphics.fillRect(BOARD_OFFSET_X - 14, BOARD_OFFSET_Y - 14, width + 28, height + 28);
 
     for (let row = 0; row < BOARD_ROWS; row += 1) {
       for (let col = 0; col < BOARD_COLS; col += 1) {
-        const shade = (row + col) % 2 === 0 ? 0x0b1220 : 0x111d32;
+        const shade = (row + col) % 2 === 0 ? 0x3a4f2c : 0x2f4325;
         this.boardGraphics.fillStyle(shade, 1);
         this.boardGraphics.fillRect(BOARD_OFFSET_X + col * CELL_SIZE, BOARD_OFFSET_Y + row * CELL_SIZE, CELL_SIZE, CELL_SIZE);
       }
     }
 
-    this.boardGraphics.lineStyle(3, NEUTRAL_COLORS.boardOuter, 1);
+    this.boardGraphics.lineStyle(5, NEUTRAL_COLORS.boardOuter, 1);
     this.boardGraphics.strokeRect(BOARD_OFFSET_X, BOARD_OFFSET_Y, width, height);
 
     this.boardGraphics.lineStyle(2, NEUTRAL_COLORS.boardLine, 1);
@@ -187,7 +194,7 @@ export class DouShouQiGameScene extends Phaser.Scene {
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
       this.audio.unlock();
 
-      if (this.actionLocked || this.gameState.status !== 'playing' || this.awaitingSnapshot || this.settingsPanelVisible) {
+      if (this.actionLocked || this.gameState.status !== 'playing' || this.awaitingSnapshot || !this.matchStarted || this.settingsPanelVisible) {
         return;
       }
 
@@ -211,9 +218,11 @@ export class DouShouQiGameScene extends Phaser.Scene {
       onStatus: (status) => {
         this.updateNetworkText();
         if (status === 'connected') {
-          if (onlineSession.getRole() === 'guest') {
+          if (onlineSession.getRole() === 'guest' || !this.matchStarted) {
             this.awaitingSnapshot = true;
-            this.gameState.lastAction = 'Connected. Waiting for host snapshot...';
+            this.gameState.lastAction = this.matchStarted
+              ? 'Connected. Waiting for host snapshot...'
+              : 'Connected. Waiting for host to start match...';
             this.renderHud();
           } else {
             this.broadcastSnapshot();
@@ -221,6 +230,13 @@ export class DouShouQiGameScene extends Phaser.Scene {
         }
       },
       onMessage: (message) => {
+        if (message.type === 'lobbyStart') {
+          this.matchStarted = true;
+          this.awaitingSnapshot = onlineSession.getRole() === 'guest';
+          this.gameState.lastAction = 'Match started. Syncing state...';
+          this.renderHud();
+        }
+
         if (message.type === 'actionRequest' && onlineSession.getRole() === 'host') {
           const actorTurn = onlineSession.remoteTurn();
           const result = applyHostAction(this.gameState, actorTurn, message.payload);
@@ -251,6 +267,15 @@ export class DouShouQiGameScene extends Phaser.Scene {
         if (message.type === 'hello') {
           this.updateNetworkText();
         }
+      }
+      ,
+      onMatchStart: () => {
+        this.matchStarted = true;
+        this.awaitingSnapshot = onlineSession.getRole() === 'guest';
+        this.gameState.lastAction = onlineSession.getRole() === 'guest'
+          ? 'Match started. Waiting for host snapshot...'
+          : 'Match started.';
+        this.renderHud();
       }
     });
 
@@ -287,6 +312,11 @@ export class DouShouQiGameScene extends Phaser.Scene {
 
   private async handleCellTap(col: number, row: number): Promise<void> {
     if (this.mode === 'online') {
+      if (!this.matchStarted) {
+        this.gameState.lastAction = 'Host has not started the match yet.';
+        this.renderHud();
+        return;
+      }
       if (onlineSession.getStatus() !== 'connected') {
         this.gameState.lastAction = 'Connection not ready. Use Reconnect.';
         this.renderHud();
@@ -707,30 +737,14 @@ export class DouShouQiGameScene extends Phaser.Scene {
 
     try {
       if (role === 'host') {
-        const offer = await onlineSession.reconnectHost();
-        window.prompt('Share this RECONNECT OFFER code with opponent', offer);
-        const answer = window.prompt('Paste RECONNECT ANSWER code from opponent');
-        if (!answer) {
-          this.gameState.lastAction = 'Reconnect canceled.';
-          this.renderHud();
-          return;
-        }
-        await onlineSession.hostAcceptAnswer(answer.trim());
-        this.gameState.lastAction = 'Reconnect answer accepted. Waiting for channel...';
-        this.renderHud();
-        return;
-      }
-
-      const offer = window.prompt('Paste RECONNECT OFFER code from host');
-      if (!offer) {
-        this.gameState.lastAction = 'Reconnect canceled.';
+        await onlineSession.reconnectHost();
+        this.gameState.lastAction = 'Reconnect offer published. Guest can reconnect now.';
         this.renderHud();
         return;
       }
       this.awaitingSnapshot = true;
-      const answer = await onlineSession.reconnectGuest(offer.trim());
-      window.prompt('Send this RECONNECT ANSWER code back to host', answer);
-      this.gameState.lastAction = 'Reconnect answer created. Waiting for host channel...';
+      await onlineSession.reconnectGuest();
+      this.gameState.lastAction = 'Reconnect answer sent. Waiting for host channel...';
       this.renderHud();
     } catch (error) {
       this.gameState.lastAction = `Reconnect failed: ${String(error)}`;

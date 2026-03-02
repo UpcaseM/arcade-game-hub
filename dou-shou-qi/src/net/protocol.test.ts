@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { GameState } from '../data/types';
-import { applyHostAction, cloneState } from './protocol';
+import { applyHostAction, cloneState, createSeededRandom } from './protocol';
 
 function createState(): GameState {
   return {
@@ -41,5 +41,10 @@ describe('protocol host authority', () => {
     cloned.animals.a.row = 1;
     expect(state.animals.a.row).toBe(0);
   });
-});
 
+  it('createSeededRandom is deterministic for same seed', () => {
+    const a = createSeededRandom(42);
+    const b = createSeededRandom(42);
+    expect([a(), a(), a()]).toEqual([b(), b(), b()]);
+  });
+});
