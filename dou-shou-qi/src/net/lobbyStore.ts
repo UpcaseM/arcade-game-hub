@@ -51,13 +51,21 @@ export interface LobbyStore {
 const LOBBY_TTL_MS = 120_000;
 const LOCAL_ROOMS_KEY = 'dou_shou_qi_rooms_v1';
 const CONFIG_KEY = 'dou_shou_qi_lobby_provider_v1';
+const BUNDLED_CONFIG_GLOBAL = '__DOU_SHOU_QI_LOBBY_CONFIG__';
 
-type LobbyProviderConfig = {
+export type LobbyProviderConfig = {
   provider: 'firebase-rtdb';
   databaseUrl: string;
   authToken?: string;
   pollIntervalMs?: number;
 };
+
+type LocalOnlyConfig = {
+  provider: 'local-only';
+};
+
+type StoredLobbyProviderConfig = LobbyProviderConfig | LocalOnlyConfig;
+export type LobbyProviderConfigSource = 'local' | 'bundled' | 'none';
 
 function nowMs(): number {
   return Date.now();
@@ -332,12 +340,58 @@ class FirebaseLobbyStore implements LobbyStore {
   }
 }
 
-export function loadLobbyProviderConfig(): LobbyProviderConfig | null {
-  const parsed = safeParse<LobbyProviderConfig>(window.localStorage.getItem(CONFIG_KEY));
-  if (!parsed || parsed.provider !== 'firebase-rtdb' || !parsed.databaseUrl) {
+function parseStoredConfig(raw: string | null): StoredLobbyProviderConfig | null {
+  const parsed = safeParse<StoredLobbyProviderConfig>(raw);
+  if (!parsed) {
     return null;
   }
-  return parsed;
+  if (parsed.provider === 'local-only') {
+    return parsed;
+  }
+  if (parsed.provider === 'firebase-rtdb' && parsed.databaseUrl) {
+    return parsed;
+  }
+  return null;
+}
+
+function loadBundledLobbyConfig(): LobbyProviderConfig | null {
+  const bundled = (window as Window & { [BUNDLED_CONFIG_GLOBAL]?: unknown })[BUNDLED_CONFIG_GLOBAL];
+  if (!bundled || typeof bundled !== 'object') {
+    return null;
+  }
+
+  const parsed = bundled as Partial<LobbyProviderConfig>;
+  if (parsed.provider !== 'firebase-rtdb' || !parsed.databaseUrl) {
+    return null;
+  }
+
+  return {
+    provider: 'firebase-rtdb',
+    databaseUrl: parsed.databaseUrl,
+    authToken: parsed.authToken,
+    pollIntervalMs: parsed.pollIntervalMs
+  };
+}
+
+export function resolveLobbyProviderConfig(): { config: LobbyProviderConfig | null; source: LobbyProviderConfigSource } {
+  const stored = parseStoredConfig(window.localStorage.getItem(CONFIG_KEY));
+  if (stored?.provider === 'local-only') {
+    return { config: null, source: 'none' };
+  }
+  if (stored?.provider === 'firebase-rtdb') {
+    return { config: stored, source: 'local' };
+  }
+
+  const bundled = loadBundledLobbyConfig();
+  if (bundled) {
+    return { config: bundled, source: 'bundled' };
+  }
+
+  return { config: null, source: 'none' };
+}
+
+export function loadLobbyProviderConfig(): LobbyProviderConfig | null {
+  return resolveLobbyProviderConfig().config;
 }
 
 export function saveLobbyProviderConfig(config: LobbyProviderConfig | null): void {
@@ -346,6 +400,10 @@ export function saveLobbyProviderConfig(config: LobbyProviderConfig | null): voi
     return;
   }
   window.localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
+}
+
+export function saveLocalOnlyLobbyConfig(): void {
+  window.localStorage.setItem(CONFIG_KEY, JSON.stringify({ provider: 'local-only' as const }));
 }
 
 export function createLobbyStore(): LobbyStore {

@@ -9,9 +9,10 @@
 
 2. Dou Shou Qi multiplayer lobby flow
 - Replaced manual offer/answer prompts from menu with a room-lobby flow.
+- Replaced browser `prompt/alert` flows with in-scene input panels and inline status toasts.
 - Added lobby data model + store abstraction in `dou-shou-qi/src/net/lobbyStore.ts`.
 - Added provider modes:
-  - Firebase Realtime Database REST mode (cross-device room listing/signaling when configured).
+  - Firebase Realtime Database REST mode (cross-device room listing/signaling from bundled config by default).
   - Local browser fallback mode (same-device/local-storage only).
 - Host flow:
   - Host creates room (optional password), enters lobby immediately.
@@ -43,7 +44,8 @@
 
 - Core gameplay sync remains peer-to-peer WebRTC DataChannel with host authority.
 - STUN-only transport remains in use; some NAT/firewall combinations can still fail.
-- True cross-device room list requires Firebase RTDB configuration in the menu (`Set Firebase Lobby URL`).
+- The shipped build loads a bundled lobby provider config from `dou-shou-qi/public/lobby-config.js` and uses it automatically unless overridden in-browser.
+- You can override lobby settings in the multiplayer menu and save them per browser.
 - If Firebase is not configured, local fallback lobby works only in the same browser/device context.
 - Room password is casual access control, not hardened security.
 
@@ -57,23 +59,29 @@ python3 -m http.server 8000
 2. Open hub on both devices:
 - `http://<your-host-ip>:8000/`
 
-3. Device A (host):
+3. Confirm lobby provider on both devices (once):
+- Open `Dou Shou Qi`.
+- Verify the provider text at the bottom says `Lobby Provider: Firebase ...`.
+- If needed, set a different URL in `Lobby URL` and click `Save Lobby Provider`.
+
+4. Device A (host):
 - Open `Dou Shou Qi`.
 - Click `Host Room`.
-- Enter name.
-- Optionally enter room password.
+- Enter `Player Name`.
+- Optionally fill `Host Room Password`.
 - Wait in lobby.
 
-4. Device B (guest):
+5. Device B (guest):
 - Open `Dou Shou Qi`.
 - In `Open Rooms`, click `Refresh Room List` if needed.
 - Click `Join` on host room.
-- Enter name and password if room is locked.
+- Set `Player Name`.
+- If locked, enter `Join Password` first.
 
-5. Device A:
+6. Device A:
 - After guest connects, click `Start Match`.
 
-6. Reconnect mid-match (if disconnected):
+7. Reconnect mid-match (if disconnected):
 - Host presses `Reconnect` (in match or lobby), then guest presses `Reconnect`.
 - Session renegotiates with latest room version.
 - Guest re-syncs to host snapshot when channel reconnects.

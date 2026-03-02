@@ -10,7 +10,7 @@ This project uses a demo-only local account system:
 Default seeded account on first run:
 
 - Username: `admin`
-- Password: `admin123`
+- Password: configured in local seed data (do not publish in UI/docs for deployment builds)
 
 Admin UI capabilities:
 

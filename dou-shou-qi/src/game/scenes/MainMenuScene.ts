@@ -1,9 +1,24 @@
 import Phaser from 'phaser';
-import { LobbyRoomSummary, loadLobbyProviderConfig, saveLobbyProviderConfig } from '../../net/lobbyStore';
+import {
+  LobbyRoomSummary,
+  resolveLobbyProviderConfig,
+  saveLobbyProviderConfig,
+  saveLocalOnlyLobbyConfig
+} from '../../net/lobbyStore';
 import { onlineSession } from '../../net/onlineSession';
 import { loadUiSettings, saveUiSettings } from '../ui/settings';
 
 const ACTIVE_USER_KEY = 'arcade_active_user_v1';
+
+type InputField = {
+  container: Phaser.GameObjects.Container;
+  box: Phaser.GameObjects.Rectangle;
+  valueText: Phaser.GameObjects.Text;
+  value: string;
+  placeholder: string;
+  secret: boolean;
+  maxLength: number;
+};
 
 function readHubIdentity(): string {
   try {
@@ -22,10 +37,23 @@ function clampVolume(value: number): number {
   return Math.max(0, Math.min(1, Number(value.toFixed(2))));
 }
 
+function trimDisplay(value: string, max = 60): string {
+  return value.length <= max ? value : `${value.slice(0, max - 3)}...`;
+}
+
 export class DouShouQiMainMenuScene extends Phaser.Scene {
   private roomListTexts: Phaser.GameObjects.Text[] = [];
   private roomsContainer?: Phaser.GameObjects.Container;
   private defaultName = 'Guest';
+  private focusedField: InputField | null = null;
+  private nameField?: InputField;
+  private hostPasswordField?: InputField;
+  private joinPasswordField?: InputField;
+  private providerUrlField?: InputField;
+  private providerTokenField?: InputField;
+  private providerText?: Phaser.GameObjects.Text;
+  private toastText?: Phaser.GameObjects.Text;
+  private toastTimer?: Phaser.Time.TimerEvent;
 
   constructor() {
     super('DouShouQiMainMenuScene');
@@ -35,110 +63,144 @@ export class DouShouQiMainMenuScene extends Phaser.Scene {
     const settings = loadUiSettings();
     this.defaultName = readHubIdentity();
 
+    const resolvedProvider = resolveLobbyProviderConfig();
+
     this.add.rectangle(500, 325, 1000, 650, 0x112211, 1);
     this.add.rectangle(500, 325, 948, 590, 0x1d2e1b, 0.94).setStrokeStyle(2, 0x365f38, 1);
 
-    this.add.text(500, 64, 'Dou Shou Qi', {
-      fontSize: '58px',
+    this.add.text(500, 60, 'Dou Shou Qi', {
+      fontSize: '54px',
       color: '#f0fdf4',
       fontFamily: 'Arial'
     }).setOrigin(0.5);
-    this.add.text(500, 112, 'Forest Lobby + Local Mode', {
-      fontSize: '22px',
+    this.add.text(500, 106, 'Forest Lobby + Local Mode', {
+      fontSize: '20px',
       color: '#bbf7d0',
       fontFamily: 'Arial'
     }).setOrigin(0.5);
 
-    this.add.text(500, 150, `Identity: ${this.defaultName}`, {
-      fontSize: '19px',
-      color: '#d1fae5',
-      fontFamily: 'Arial'
-    }).setOrigin(0.5);
+    this.nameField = this.createInputField(76, 154, 320, 'Player Name', this.defaultName);
+    this.hostPasswordField = this.createInputField(76, 220, 320, 'Host Room Password (optional)', '', true);
+    this.joinPasswordField = this.createInputField(76, 286, 320, 'Join Password (if room is locked)', '', true);
 
-    this.makeActionButton(212, 210, 'Start Local Match', async () => {
+    this.providerUrlField = this.createInputField(
+      76,
+      384,
+      320,
+      'Lobby URL (Firebase RTDB)',
+      resolvedProvider.config?.databaseUrl ?? ''
+    );
+    this.providerTokenField = this.createInputField(
+      76,
+      450,
+      320,
+      'Lobby Auth Token (optional)',
+      resolvedProvider.config?.authToken ?? '',
+      true,
+      200
+    );
+
+    this.makeActionButton(430, 166, 'Start Local Match', async () => {
       this.scene.start('DouShouQiGameScene', { mode: 'local' as const });
     });
 
-    this.makeActionButton(212, 258, 'Host Room', async () => {
-      const name = window.prompt('Your player name', this.defaultName)?.trim();
+    this.makeActionButton(430, 214, 'Host Room', async () => {
+      const name = this.nameField?.value.trim() ?? '';
       if (!name) {
+        this.showToast('Enter a player name first.');
+        this.focusInput(this.nameField);
         return;
       }
 
-      const roomPassword = window.prompt('Optional room password (leave blank for open room)', '')?.trim() ?? '';
       try {
-        const room = await onlineSession.hostRoom(name, roomPassword);
+        const room = await onlineSession.hostRoom(name, this.hostPasswordField?.value.trim() ?? '');
         this.scene.start('DouShouQiLobbyScene', { role: 'host', roomId: room.id });
       } catch (error) {
-        window.alert(`Create room failed: ${String(error)}`);
+        this.showToast(`Create room failed: ${String(error)}`);
       }
     });
 
-    this.makeActionButton(212, 306, 'Refresh Room List', async () => {
+    this.makeActionButton(430, 262, 'Refresh Room List', async () => {
       await this.refreshRooms();
     });
 
-    this.makeActionButton(212, 354, 'Set Firebase Lobby URL', async () => {
-      const config = loadLobbyProviderConfig();
-      const nextUrl = window.prompt('Firebase Realtime Database URL (https://<project>.firebaseio.com)', config?.databaseUrl ?? '');
-      if (!nextUrl) {
+    this.makeActionButton(430, 394, 'Save Lobby Provider', async () => {
+      const databaseUrl = this.providerUrlField?.value.trim() ?? '';
+      if (!databaseUrl) {
+        this.showToast('Lobby URL cannot be empty.');
+        this.focusInput(this.providerUrlField);
         return;
       }
-
-      const authToken = window.prompt('Optional Firebase auth token for locked rules', config?.authToken ?? '') ?? '';
       saveLobbyProviderConfig({
         provider: 'firebase-rtdb',
-        databaseUrl: nextUrl.trim(),
-        authToken: authToken.trim() || undefined
+        databaseUrl,
+        authToken: this.providerTokenField?.value.trim() || undefined
       });
-      window.alert('Lobby provider saved. Re-open Host/Join flow if one is active.');
-      this.scene.restart();
+      this.showToast('Lobby provider saved for this browser.');
+      this.updateProviderText();
     });
 
-    this.makeActionButton(212, 402, 'Use Local Lobby Only', async () => {
+    this.makeActionButton(430, 442, 'Use Local Lobby Only', async () => {
+      saveLocalOnlyLobbyConfig();
+      this.showToast('Using local-browser fallback lobby only.');
+      this.updateProviderText();
+      await this.refreshRooms();
+    });
+
+    this.makeActionButton(430, 490, 'Use Bundled Lobby Config', async () => {
       saveLobbyProviderConfig(null);
-      window.alert('Switched to local-browser lobby fallback.');
-      this.scene.restart();
+      this.showToast('Using bundled lobby provider configuration.');
+      const nextConfig = resolveLobbyProviderConfig();
+      this.setInputValue(this.providerUrlField, nextConfig.config?.databaseUrl ?? '');
+      this.setInputValue(this.providerTokenField, nextConfig.config?.authToken ?? '');
+      this.updateProviderText();
+      await this.refreshRooms();
     });
 
-    this.makeActionButton(212, 450, 'Tutorial', async () => {
+    this.makeActionButton(430, 538, 'Tutorial', async () => {
       this.scene.start('DouShouQiTutorialScene');
     });
 
-    this.add.text(660, 198, 'Open Rooms', {
+    this.add.text(752, 152, 'Open Rooms', {
       fontFamily: 'Arial',
       fontSize: '30px',
       color: '#ecfdf5'
     }).setOrigin(0.5);
 
-    this.roomsContainer = this.add.container(430, 226);
+    this.add.text(752, 182, 'Join uses Player Name + Join Password field on the left.', {
+      fontFamily: 'Arial',
+      fontSize: '14px',
+      color: '#bef264'
+    }).setOrigin(0.5);
 
-    const reducedMotionButton = this.makeToggleButton(90, 560, () => `Reduced Motion: ${settings.reducedMotion ? 'On' : 'Off'}`, () => {
+    this.roomsContainer = this.add.container(500, 212);
+
+    const reducedMotionButton = this.makeToggleButton(80, 560, () => `Reduced Motion: ${settings.reducedMotion ? 'On' : 'Off'}`, () => {
       settings.reducedMotion = !settings.reducedMotion;
       saveUiSettings(settings);
     });
 
-    const colorAssistButton = this.makeToggleButton(90, 596, () => `Color Assist: ${settings.colorAssist ? 'On' : 'Off'}`, () => {
+    const colorAssistButton = this.makeToggleButton(80, 596, () => `Color Assist: ${settings.colorAssist ? 'On' : 'Off'}`, () => {
       settings.colorAssist = !settings.colorAssist;
       saveUiSettings(settings);
     });
 
-    const musicMuteButton = this.makeToggleButton(390, 560, () => `Music Mute: ${settings.musicMuted ? 'On' : 'Off'}`, () => {
+    const musicMuteButton = this.makeToggleButton(330, 560, () => `Music Mute: ${settings.musicMuted ? 'On' : 'Off'}`, () => {
       settings.musicMuted = !settings.musicMuted;
       saveUiSettings(settings);
     });
 
-    const sfxMuteButton = this.makeToggleButton(390, 596, () => `SFX Mute: ${settings.sfxMuted ? 'On' : 'Off'}`, () => {
+    const sfxMuteButton = this.makeToggleButton(330, 596, () => `SFX Mute: ${settings.sfxMuted ? 'On' : 'Off'}`, () => {
       settings.sfxMuted = !settings.sfxMuted;
       saveUiSettings(settings);
     });
 
-    const musicVolButton = this.makeToggleButton(640, 560, () => `Music Vol: ${Math.round(settings.musicVolume * 100)}%`, () => {
+    const musicVolButton = this.makeToggleButton(580, 560, () => `Music Vol: ${Math.round(settings.musicVolume * 100)}%`, () => {
       settings.musicVolume = clampVolume(settings.musicVolume >= 1 ? 0 : settings.musicVolume + 0.1);
       saveUiSettings(settings);
     });
 
-    const sfxVolButton = this.makeToggleButton(640, 596, () => `SFX Vol: ${Math.round(settings.sfxVolume * 100)}%`, () => {
+    const sfxVolButton = this.makeToggleButton(580, 596, () => `SFX Vol: ${Math.round(settings.sfxVolume * 100)}%`, () => {
       settings.sfxVolume = clampVolume(settings.sfxVolume >= 1 ? 0 : settings.sfxVolume + 0.1);
       saveUiSettings(settings);
     });
@@ -150,14 +212,174 @@ export class DouShouQiMainMenuScene extends Phaser.Scene {
     this.add.existing(musicVolButton);
     this.add.existing(sfxVolButton);
 
-    const config = loadLobbyProviderConfig();
-    this.add.text(500, 630, config ? `Lobby Provider: Firebase (${config.databaseUrl})` : 'Lobby Provider: Local browser fallback (same-device only)', {
+    this.providerText = this.add.text(500, 628, '', {
       fontSize: '14px',
       color: '#a7f3d0',
       fontFamily: 'Arial'
     }).setOrigin(0.5);
 
+    this.toastText = this.add.text(500, 26, '', {
+      fontFamily: 'Arial',
+      fontSize: '16px',
+      color: '#fef9c3',
+      backgroundColor: '#14532d',
+      padding: { x: 8, y: 4 }
+    }).setOrigin(0.5);
+    this.toastText.setVisible(false);
+
+    this.input.keyboard?.on('keydown', (event: KeyboardEvent) => {
+      this.handleKeyInput(event);
+    });
+
+    this.input.on('pointerdown', (_pointer: Phaser.Input.Pointer, currentlyOver: Phaser.GameObjects.GameObject[]) => {
+      if (!currentlyOver.some((item) => item.getData('input-field') === true)) {
+        this.focusInput(null);
+      }
+    });
+
+    this.updateProviderText();
     void this.refreshRooms();
+    this.focusInput(this.nameField);
+  }
+
+  private createInputField(
+    x: number,
+    y: number,
+    width: number,
+    label: string,
+    initialValue: string,
+    secret = false,
+    maxLength = 64
+  ): InputField {
+    const labelText = this.add.text(x, y, label, {
+      fontFamily: 'Arial',
+      fontSize: '15px',
+      color: '#d1fae5'
+    });
+
+    const box = this.add.rectangle(x + width / 2, y + 38, width, 36, 0x0f1f12, 0.97);
+    box.setStrokeStyle(2, 0x4d7c0f, 0.95);
+
+    const valueText = this.add.text(x + 12, y + 26, '', {
+      fontFamily: 'Arial',
+      fontSize: '18px',
+      color: '#f0fdf4'
+    });
+
+    const hitBox = this.add.rectangle(x + width / 2, y + 38, width, 36, 0xffffff, 0.001);
+    hitBox.setInteractive({ useHandCursor: true });
+    hitBox.setData('input-field', true);
+    hitBox.on('pointerdown', () => {
+      const field = hitBox.getData('field') as InputField;
+      this.focusInput(field);
+    });
+
+    const container = this.add.container(0, 0, [labelText, box, valueText, hitBox]);
+
+    const field: InputField = {
+      container,
+      box,
+      valueText,
+      value: initialValue,
+      placeholder: 'Type here...',
+      secret,
+      maxLength
+    };
+
+    hitBox.setData('field', field);
+    this.renderInputField(field);
+    return field;
+  }
+
+  private renderInputField(field: InputField): void {
+    const focused = this.focusedField === field;
+    field.box.setStrokeStyle(2, focused ? 0x84cc16 : 0x4d7c0f, 0.95);
+
+    const visibleValue = field.secret ? '*'.repeat(field.value.length) : field.value;
+    if (visibleValue.length === 0) {
+      field.valueText.setText(field.placeholder);
+      field.valueText.setColor('#86a597');
+      return;
+    }
+
+    const capped = visibleValue.length > 36 ? `${visibleValue.slice(0, 36)}...` : visibleValue;
+    field.valueText.setText(focused ? `${capped}|` : capped);
+    field.valueText.setColor('#f0fdf4');
+  }
+
+  private setInputValue(field: InputField | undefined, value: string): void {
+    if (!field) {
+      return;
+    }
+    field.value = value.slice(0, field.maxLength);
+    this.renderInputField(field);
+  }
+
+  private focusInput(field: InputField | null | undefined): void {
+    this.focusedField = field ?? null;
+    [this.nameField, this.hostPasswordField, this.joinPasswordField, this.providerUrlField, this.providerTokenField]
+      .filter((item): item is InputField => Boolean(item))
+      .forEach((item) => this.renderInputField(item));
+  }
+
+  private handleKeyInput(event: KeyboardEvent): void {
+    if (!this.focusedField) {
+      return;
+    }
+
+    const field = this.focusedField;
+
+    if (event.key === 'Backspace') {
+      field.value = field.value.slice(0, -1);
+      this.renderInputField(field);
+      event.preventDefault();
+      return;
+    }
+
+    if (event.key === 'Enter' || event.key === 'Tab') {
+      this.focusInput(null);
+      event.preventDefault();
+      return;
+    }
+
+    if (event.key.length !== 1 || event.ctrlKey || event.metaKey || event.altKey) {
+      return;
+    }
+
+    if (field.value.length >= field.maxLength) {
+      return;
+    }
+
+    field.value += event.key;
+    this.renderInputField(field);
+    event.preventDefault();
+  }
+
+  private showToast(message: string): void {
+    if (!this.toastText) {
+      return;
+    }
+    this.toastText.setText(message);
+    this.toastText.setVisible(true);
+    this.toastTimer?.remove(false);
+    this.toastTimer = this.time.delayedCall(2800, () => {
+      this.toastText?.setVisible(false);
+    });
+  }
+
+  private updateProviderText(): void {
+    if (!this.providerText) {
+      return;
+    }
+
+    const resolved = resolveLobbyProviderConfig();
+    if (!resolved.config) {
+      this.providerText.setText('Lobby Provider: Local browser fallback (same-device only)');
+      return;
+    }
+
+    const source = resolved.source === 'local' ? 'saved in browser' : 'bundled default';
+    this.providerText.setText(`Lobby Provider: Firebase (${source}) ${trimDisplay(resolved.config.databaseUrl, 54)}`);
   }
 
   private async refreshRooms(): Promise<void> {
@@ -170,13 +392,7 @@ export class DouShouQiMainMenuScene extends Phaser.Scene {
       this.renderRooms(rooms);
     } catch (error) {
       this.renderRooms([]);
-      const text = this.add.text(430, 560, `Room refresh failed: ${String(error)}`, {
-        fontFamily: 'Arial',
-        fontSize: '14px',
-        color: '#fecaca'
-      });
-      this.roomListTexts.push(text);
-      this.time.delayedCall(2400, () => text.destroy());
+      this.showToast(`Room refresh failed: ${String(error)}`);
     }
   }
 
@@ -194,7 +410,7 @@ export class DouShouQiMainMenuScene extends Phaser.Scene {
         fontFamily: 'Arial',
         fontSize: '20px',
         color: '#d1fae5',
-        wordWrap: { width: 470 }
+        wordWrap: { width: 430 }
       });
       this.roomsContainer.add(emptyText);
       this.roomListTexts.push(emptyText);
@@ -202,10 +418,10 @@ export class DouShouQiMainMenuScene extends Phaser.Scene {
     }
 
     rooms.slice(0, 7).forEach((room, index) => {
-      const y = index * 54;
-      const roomText = this.add.text(0, y, `${room.locked ? '🔒' : '🔓'} ${room.hostName}  ·  Room ${room.id}`, {
+      const y = index * 56;
+      const roomText = this.add.text(0, y, `${room.locked ? '[LOCK]' : '[OPEN]'} ${room.hostName}  ·  Room ${room.id}`, {
         fontFamily: 'Arial',
-        fontSize: '19px',
+        fontSize: '18px',
         color: '#ecfdf5'
       });
 
@@ -228,24 +444,25 @@ export class DouShouQiMainMenuScene extends Phaser.Scene {
   }
 
   private async joinRoom(room: LobbyRoomSummary): Promise<void> {
-    const name = window.prompt('Your player name', this.defaultName)?.trim();
+    const name = this.nameField?.value.trim() ?? '';
     if (!name) {
+      this.showToast('Enter your player name before joining.');
+      this.focusInput(this.nameField);
       return;
     }
 
-    let password = '';
-    if (room.locked) {
-      password = window.prompt('Room password', '')?.trim() ?? '';
-      if (!password) {
-        return;
-      }
+    const password = this.joinPasswordField?.value.trim() ?? '';
+    if (room.locked && !password) {
+      this.showToast('This room is locked. Enter the Join Password field.');
+      this.focusInput(this.joinPasswordField);
+      return;
     }
 
     try {
       await onlineSession.joinRoom(name, room.id, password);
       this.scene.start('DouShouQiLobbyScene', { role: 'guest', roomId: room.id });
     } catch (error) {
-      window.alert(`Join room failed: ${String(error)}`);
+      this.showToast(`Join room failed: ${String(error)}`);
       await this.refreshRooms();
     }
   }

@@ -33,11 +33,21 @@ This project intentionally uses **flip mode** (暗棋开局), not the standard 7
 - Roles: host controls `player1`, guest controls `player2`.
 - Identity defaults to hub account username (`arcade_active_user_v1`) when available.
 - Reconnect stays in the same room by publishing a fresh offer/answer version.
+- Lobby/menu interactions use in-scene forms (no browser prompt/alert flow).
+
+## Lobby Provider Configuration
+
+- Default cross-device config is bundled in `public/lobby-config.js` and loaded automatically at startup.
+- For a different deployment, update `databaseUrl` in `public/lobby-config.js` before building.
+- Per-browser override is available from the multiplayer menu:
+  - Set `Lobby URL` and optional `Lobby Auth Token`, then click `Save Lobby Provider`.
+  - Click `Use Bundled Lobby Config` to remove local override.
+  - Click `Use Local Lobby Only` to force same-device localStorage fallback.
 
 ### Limitations
 
 - STUN-only (no TURN): strict NAT/firewall setups may fail to connect.
-- Cross-device room listing requires a configured Firebase Realtime Database URL.
+- Cross-device room listing requires a writable Firebase Realtime Database URL.
 - Without Firebase config, fallback lobby uses local browser storage (same-device only).
 - Room passwords are casual access control (salted hash stored client-side), not strong security.
 - Client authority/security is demo-grade and not anti-cheat hardened.

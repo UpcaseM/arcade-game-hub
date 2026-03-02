@@ -13,6 +13,7 @@ const transportInstances: MockTransport[] = [];
 class MockTransport {
   private readonly role: OnlineRole;
   private listener: TransportListener = {};
+  sendCalls = 0;
 
   constructor(role: OnlineRole) {
     this.role = role;
@@ -36,6 +37,7 @@ class MockTransport {
   }
 
   send(): boolean {
+    this.sendCalls += 1;
     return true;
   }
 
@@ -45,6 +47,10 @@ class MockTransport {
 
   emitOpen(): void {
     this.listener.onOpen?.();
+  }
+
+  emitMessage(message: NetMessage): void {
+    this.listener.onMessage?.(message);
   }
 }
 
@@ -123,5 +129,21 @@ describe('onlineSession lobby lifecycle', () => {
 
     const patch = store.updateRoom.mock.calls.at(-1)?.[1] as Partial<LobbyRoom>;
     expect((patch.version ?? 0) > mockRoom.version).toBe(true);
+  });
+
+  it('blocks action requests before match start and allows after lobbyStart', async () => {
+    const { onlineSession } = await import('./onlineSession');
+    await onlineSession.hostRoom('Alice');
+
+    transportInstances.at(-1)?.emitOpen();
+    const beforeStart = onlineSession.requestAction({ type: 'flip', pieceId: 'p1' });
+    expect(beforeStart).toBe(false);
+
+    transportInstances.at(-1)?.emitMessage({
+      type: 'lobbyStart',
+      payload: { roomId: 'room-1', seed: 42, version: 1 }
+    });
+    const afterStart = onlineSession.requestAction({ type: 'flip', pieceId: 'p1' });
+    expect(afterStart).toBe(true);
   });
 });
