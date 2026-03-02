@@ -1,82 +1,71 @@
-# Post-Release Audit Report (Loop 1)
+# Post-Release Audit Report (Loop 2 Update)
 
 - Commit: `dcba254`
 - Date: 2026-03-02
 - Scope: UI simplification, lobby provider fallback, responsive hub/embed behavior, and test coverage.
-- Inputs: `plan.json` (ship-20260302T041326Z-e62cec86), commit diff, source/tests/build artifacts.
-- Prior review feedback file: `review_report.loop-0.json` was empty (`{}`), so no inherited fix items.
+- Inputs: `plan.json` (ship-20260302T041326Z-e62cec86), `review_report.loop-1.json`, source/tests/build artifacts.
 
 ## Work Package Status
 
 | WP | Title | Status | Evidence |
 |---|---|---|---|
-| WP1 | Provider Resolution + Normalization | Pass | URL normalization tests pass; config precedence verified in `resolveLobbyProviderConfig` and menu provider text/update paths. |
-| WP2 | Resilient Fallback Store | Pass (with risk) | Fallback switch logic verified; fallback simulation via code-path review confirms one-way switch to local fallback on network-like/provider errors. |
-| WP3 | OnlineSession Lifecycle | Pass | `listOpenRooms`, `hostRoom`, and `joinRoom` all reload provider store before operation. Unit suite passes. |
-| WP4 | UI Simplification | Pass (code-level) | Quick actions visible in default view; details overlay hidden by default and toggles correctly. |
-| WP5 | Responsive + Embed Verification | Partial | CSS/JS scroll-lock and iframe sizing logic verified; browser/device manual execution still pending in this loop. |
-| WP6 | Coverage + Workflow Gates | Pass (with gaps logged) | All required automated gates executed successfully; missing targeted tests categorized below. |
+| WP1 | Provider Resolution + Normalization | Pass | `lobbyStore` unit suite passes; code-path review still matches documented precedence/normalization behavior. |
+| WP2 | Resilient Fallback Store | **Fail (runtime validation blocked in this environment)** | Required invalid-URL/offline runtime simulations could not be executed because sandbox denies socket/network operations needed for local serving/browser automation (`PermissionError: [Errno 1] Operation not permitted`, `EAI_AGAIN` npm registry resolution failure). |
+| WP3 | OnlineSession Lifecycle | Pass | `onlineSession` unit suite passes; provider reload behavior remains covered by existing tests. |
+| WP4 | UI Simplification | **Fail (runtime validation blocked in this environment)** | Required interactive host/join/refresh/details/tutorial smoke flow could not run without browser runtime access. |
+| WP5 | Responsive + Embed Verification | **Fail (runtime validation blocked in this environment)** | Required desktop/mobile viewport + rotation checks could not run; local HTTP server and browser automation both blocked by sandbox permissions. |
+| WP6 | Coverage + Workflow Gates | Pass (with noted gaps) | Automated gates re-run and passing; runtime-only evidence remains unavailable in this loop due execution constraints. |
 
 ## Acceptance Criteria Matrix
 
 | ID | Status | Notes |
 |---|---|---|
-| AC1 | Pass | Quick-view primary actions exist in default menu state. |
-| AC2 | Pass | Details objects hidden at init and toggled via Show/Hide Details label. |
-| AC3 | Pass | Provider text reflects local fallback vs firebase source + trimmed URL. |
-| AC4 | Pass | Firebase URL normalization covers missing protocol and `/rooms(.json)` stripping; persisted via localStorage. |
-| AC5 | Pass | "Use Bundled Lobby Config" clears local override and repopulates provider fields from resolved config. |
-| AC6 | Pass | Local-only sentinel stored and resolved as `config: null` (`source: 'none'`). |
-| AC7 | Pass (with risk) | Resilient store falls back to local on matching failures and retries operation. |
-| AC8 | Pass | onlineSession reloads store before list/host/join operations. |
-| AC9 | Pass | Paging buttons hidden when single page; alpha state updates at bounds; page label maintained. |
-| AC10 | Pass | Hub toggles `game-lock-scroll` only for Dou Shou Qi screen. |
-| AC11 | Partial | CSS implementation supports no-double-scroll/full-height behavior; device manual run pending. |
-| AC12 | Pass | All listed automated checks passed (unit/regression/build). |
-| AC13 | Pass | No new assets were introduced in this loop. |
+| AC1 | Partial | Code-level verified previously; runtime quick-flow validation blocked this loop. |
+| AC2 | Partial | Code-level verified previously; runtime details-toggle interaction validation blocked this loop. |
+| AC3 | Pass | Provider text logic and source resolution behavior unchanged and code-verified. |
+| AC4 | Pass | URL normalization/persistence remains covered by passing unit tests. |
+| AC5 | Pass | Bundled-config reset path remains code-verified; no regressions observed in automated checks. |
+| AC6 | Pass | Local-only sentinel resolution remains code-verified and unit-backed. |
+| AC7 | **Fail (runtime evidence missing)** | Requested real failure simulations (invalid URL + offline/blocked request) not executable in this sandbox. |
+| AC8 | Pass | Existing unit tests still confirm store reload before list/host/join flows. |
+| AC9 | Partial | Code-level paging logic remains intact; interactive paging behavior not runtime-validated in this loop. |
+| AC10 | Pass | Hub class toggle logic remains code-verified and unchanged. |
+| AC11 | **Fail (runtime evidence missing)** | Mobile/desktop runtime checks not executable in this sandbox. |
+| AC12 | Pass | All required automated checks pass in this loop (tests + static-paths + build). |
+| AC13 | Pass | No new assets introduced. |
 
-## Findings (Severity-Ordered)
+## Runtime Validation Attempts and Blockers
 
-1. `P1` Runtime fallback clarity risk (non-blocking)
-- File: `dou-shou-qi/src/net/lobbyStore.ts`
-- `shouldFallbackToLocal` treats `Lobby provider request failed (...)` as fallback-eligible, including auth or server-side failures.
-- Impact: user may silently move to same-device local lobby when remote config is invalid/unauthorized.
-- Recommendation: future patch should narrow fallback predicate to network/CORS/connectivity classes only and surface explicit auth/config errors.
+1. Local manual/runtime server setup failed:
+- Command attempted: `python3 -m http.server 8000`
+- Result: `PermissionError: [Errno 1] Operation not permitted` when creating socket.
 
-2. `P1` Coverage gap: provider precedence and fallback class behavior
-- Files: `dou-shou-qi/src/net/lobbyStore.test.ts`, `dou-shou-qi/src/net/onlineSession.test.ts`
-- Missing targeted tests for:
-  - local-only sentinel precedence over bundled config
-  - bundled config resolution when local override absent
-  - resilient fallback one-way switch behavior under specific error classes
-- Recommendation: add focused unit tests in a follow-up hardening loop.
+2. Browser runtime automation failed:
+- Command attempted: `chromium-browser --headless ... --remote-debugging-port=9222`
+- Result: snap confinement/capability error (`required permitted capability cap_dac_override not found`).
 
-3. `P2` Responsive behavior lacks automated guardrails
-- Files: `styles.css`, `script.js`
-- Current verification is static/code-level only for mobile/desktop behavior.
-- Recommendation: add Playwright smoke checks for screen toggle + iframe height/scroll lock assertions.
+3. Playwright prerequisite install failed:
+- Command attempted: `npx playwright install`
+- Result: DNS/network restriction (`EAI_AGAIN registry.npmjs.org`).
 
-## Commands Run and Results
+Because of these constraints, required runtime checks from review loop 1 could not be completed in this execution environment.
+
+## Commands Run and Results (Loop 2)
 
 - `cd dou-shou-qi && npm test -- --run src/net/lobbyStore.test.ts` -> pass (5/5)
 - `cd dou-shou-qi && npm test -- --run src/net/onlineSession.test.ts` -> pass (5/5)
 - `node --test tools/auth.test.mjs` -> pass
 - `node tools/validate-static-paths.mjs` -> pass (`Static path validation passed.`)
-- `cd dou-shou-qi && npm run build` -> pass (vite build successful; non-blocking large chunk warning)
+- `cd dou-shou-qi && npm run build` -> pass (vite build successful; non-blocking chunk-size warning)
+- `python3 -m http.server 8000` -> fail (sandbox socket permission denied)
+- `chromium-browser --headless ... --remote-debugging-port=9222` -> fail (snap capability permission denied)
+- `npx playwright install` -> fail (network/DNS restricted to npm registry)
 
-## Release Gate Checklist (Current Recommendation)
+## Next Required Follow-Up (Outside This Sandbox)
 
-Required pre-release checks:
-- `node --test tools/auth.test.mjs`
-- `node tools/validate-static-paths.mjs`
-- `cd dou-shou-qi && npm test`
-- `cd dou-shou-qi && npm run build`
-
-Known non-gate:
-- `cd dou-shou-qi && npm run lint` (tracked mismatch; keep non-blocking until config modernization)
-
-## Blocking Defect Decision
-
-- Blocking defect found in loop 1: **No**
-- Product code changes applied: **None**
-- Rationale: all required automated gates pass; observed issues are risk/coverage items appropriate for hardening follow-up.
+1. Run the three blocked runtime validations in an environment that allows local serving + browser automation.
+2. Record explicit pass/fail evidence for:
+- WP2/AC7 provider failure simulations (invalid provider URL + offline/blocked request).
+- WP4 AC1/AC2/AC9 interactive quick-flow/details/paging checks.
+- WP5/AC11 responsive desktop/mobile + rotation checks.
+3. If Playwright snapshots are required by the workflow, install browsers and attach generated files, else explicitly waive snapshots with rationale.
