@@ -215,6 +215,7 @@ export class DouShouQiGameScene extends Phaser.Scene {
       return false;
     }
 
+    const moverColor = this.gameState.playerColors[this.gameState.currentTurn];
     const fromCol = selectedPiece.col;
     const fromRow = selectedPiece.row;
     const fromPoint = this.cellCenter(fromCol, fromRow);
@@ -228,8 +229,7 @@ export class DouShouQiGameScene extends Phaser.Scene {
     this.actionLocked = true;
     this.clearSelection();
 
-    const currentColor = this.gameState.playerColors[this.gameState.currentTurn];
-    const trailColor = currentColor ? getPlayerIdentity(currentColor).primaryColor : 0x38bdf8;
+    const trailColor = moverColor ? getPlayerIdentity(moverColor).primaryColor : 0x38bdf8;
     showMoveTrail(this, fromPoint, toPoint, trailColor, this.settings.reducedMotion);
 
     await playMoveTween(this, movingView.container, toPoint.x, toPoint.y, this.settings.reducedMotion);

@@ -98,8 +98,8 @@ export class HudView {
       panel.turnCaret.setVisible(isActive);
     });
 
-    const blueLeft = Object.values(gameState.animals).filter((animal) => animal.color === 'blue').length;
-    const redLeft = Object.values(gameState.animals).filter((animal) => animal.color === 'red').length;
+    const blueLeft = Object.values(gameState.animals).filter((animal) => animal.color === 'blue' && !animal.hidden).length;
+    const redLeft = Object.values(gameState.animals).filter((animal) => animal.color === 'red' && !animal.hidden).length;
     const hiddenLeft = Object.values(gameState.animals).filter((animal) => animal.hidden).length;
 
     this.infoText.setText(`Blue ${blueLeft} | Red ${redLeft} | Hidden ${hiddenLeft}`);
