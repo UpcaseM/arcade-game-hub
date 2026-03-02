@@ -60,6 +60,7 @@ export class DouShouQiMainMenuScene extends Phaser.Scene {
   private toastTimer?: Phaser.Time.TimerEvent;
   private detailsToggleLabel?: Phaser.GameObjects.Text;
   private detailsObjects: Array<Phaser.GameObjects.Container | Phaser.GameObjects.Rectangle | Phaser.GameObjects.Text> = [];
+  private joinInFlight = false;
   private readonly onLobbyFallback = () => {
     this.showToast('Remote lobby unavailable; using local-only lobby (same-device only).');
   };
@@ -566,6 +567,10 @@ export class DouShouQiMainMenuScene extends Phaser.Scene {
   }
 
   private async joinRoom(room: LobbyRoomSummary): Promise<void> {
+    if (this.joinInFlight) {
+      return;
+    }
+
     const name = this.nameField?.value.trim() ?? '';
     if (!name) {
       this.showToast('Enter your player name before joining.');
@@ -580,12 +585,19 @@ export class DouShouQiMainMenuScene extends Phaser.Scene {
       return;
     }
 
+    this.joinInFlight = true;
     try {
       await onlineSession.joinRoom(name, room.id, password);
       this.scene.start('DouShouQiLobbyScene', { role: 'guest', roomId: room.id });
     } catch (error) {
-      this.showToast(`Join room failed: ${String(error)}`);
+      const message = error instanceof Error ? error.message : String(error);
+      const detail = message.includes('Room is no longer available')
+        ? 'Room was just claimed. Refresh and pick another open room.'
+        : message;
+      this.showToast(`Join room failed: ${detail}`);
       await this.refreshRooms();
+    } finally {
+      this.joinInFlight = false;
     }
   }
 

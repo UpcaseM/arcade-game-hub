@@ -123,6 +123,31 @@ describe('onlineSession lobby lifecycle', () => {
     expect(store.updateRoom).toHaveBeenCalled();
   });
 
+  it('recovers guest join when duplicate click caused room reservation race', async () => {
+    const { onlineSession } = await import('./onlineSession');
+
+    store.getRoom
+      .mockResolvedValueOnce({ ...mockRoom })
+      .mockResolvedValueOnce({
+        ...mockRoom,
+        guestName: 'Bob',
+        answerCode: 'answer-old',
+        status: 'connected'
+      });
+    store.joinRoom.mockRejectedValueOnce(new Error('Room is no longer available.'));
+
+    await onlineSession.joinRoom('Bob', 'room-1');
+
+    expect(store.updateRoom).toHaveBeenCalledWith(
+      'room-1',
+      expect.objectContaining({
+        guestName: 'Bob',
+        status: 'connected'
+      })
+    );
+    expect(onlineSession.getRole()).toBe('guest');
+  });
+
   it('host reconnect bumps room version', async () => {
     const { onlineSession } = await import('./onlineSession');
     await onlineSession.hostRoom('Alice');

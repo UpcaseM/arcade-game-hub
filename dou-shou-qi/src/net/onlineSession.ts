@@ -160,10 +160,33 @@ class OnlineSession {
     this.bindTransport(transport);
     const answerCode = await transport.acceptOfferAndCreateAnswer(room.offerCode);
 
-    const joined = await this.lobbyStore.joinRoom(room.id, {
-      guestName: localName,
-      answerCode
-    });
+    let joined: LobbyRoom;
+    try {
+      joined = await this.lobbyStore.joinRoom(room.id, {
+        guestName: localName,
+        answerCode
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (!message.includes('Room is no longer available')) {
+        throw error;
+      }
+
+      // If the same guest triggered duplicate join attempts, re-claim this room
+      // with the latest answer payload instead of hard-failing.
+      const existing = await this.lobbyStore.getRoom(room.id);
+      if (!existing || existing.status === 'closed' || (existing.guestName && existing.guestName !== localName)) {
+        throw error;
+      }
+
+      joined = await this.lobbyStore.updateRoom(room.id, {
+        guestName: localName,
+        answerCode,
+        status: existing.status === 'started' ? 'started' : 'connected',
+        updatedAt: Date.now(),
+        lastHeartbeat: Date.now()
+      });
+    }
 
     this.currentRoom = joined;
     this.startRoomWatch(room.id);
