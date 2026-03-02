@@ -19,6 +19,8 @@ type SessionListener = {
 };
 
 const HEARTBEAT_MS = 5000;
+type TransportMode = 'webrtc' | 'relay';
+type RelayEnvelope = { seq: number; at: number; from: OnlineRole; message: NetMessage };
 
 function generateSalt(): string {
   const bytes = new Uint8Array(16);
@@ -49,6 +51,10 @@ class OnlineSession {
   private heartbeatTimer: number | null = null;
   private acceptedAnswerVersion: number | null = null;
   private matchStarted = false;
+  private transportMode: TransportMode = 'webrtc';
+  private relayOutSeq = 0;
+  private seenHostRelaySeq = 0;
+  private seenGuestRelaySeq = 0;
 
   setListener(listener: SessionListener): void {
     this.listener = listener;
@@ -104,11 +110,21 @@ class OnlineSession {
     this.role = 'host';
     this.matchStarted = false;
     this.applyStatus('signaling');
+    this.transportMode = 'webrtc';
 
-    const transport = new WebRtcManualTransport('host');
-    this.transport = transport;
-    this.bindTransport(transport);
-    const offerCode = await transport.createOffer();
+    let offerCode = '';
+    try {
+      const transport = new WebRtcManualTransport('host');
+      this.transport = transport;
+      this.bindTransport(transport);
+      offerCode = await transport.createOffer();
+    } catch {
+      // Some devices fail WebRTC init in browser internals; fall back to room relay.
+      this.transport?.destroy();
+      this.transport = null;
+      this.transportMode = 'relay';
+      this.applyStatus('signaling');
+    }
 
     const trimmedPassword = password?.trim() ?? '';
     const locked = trimmedPassword.length > 0;
@@ -120,11 +136,15 @@ class OnlineSession {
       offerCode,
       locked,
       passwordSalt: salt,
-      passwordHash
+      passwordHash,
+      transportMode: this.transportMode
     });
 
     this.currentRoom = room;
     this.acceptedAnswerVersion = null;
+    this.relayOutSeq = 0;
+    this.seenHostRelaySeq = 0;
+    this.seenGuestRelaySeq = 0;
     this.startRoomWatch(room.id);
     this.startHeartbeat();
     return room;
@@ -154,43 +174,77 @@ class OnlineSession {
     this.role = 'guest';
     this.matchStarted = room.status === 'started';
     this.applyStatus('signaling');
+    this.transportMode = room.transportMode ?? 'webrtc';
 
-    const transport = new WebRtcManualTransport('guest');
-    this.transport = transport;
-    this.bindTransport(transport);
-    const answerCode = await transport.acceptOfferAndCreateAnswer(room.offerCode);
+    let answerCode: string | undefined;
+    let relayJoin = this.transportMode === 'relay';
+    if (!relayJoin) {
+      try {
+        const transport = new WebRtcManualTransport('guest');
+        this.transport = transport;
+        this.bindTransport(transport);
+        answerCode = await transport.acceptOfferAndCreateAnswer(room.offerCode);
+      } catch {
+        this.transport?.destroy();
+        this.transport = null;
+        this.transportMode = 'relay';
+        relayJoin = true;
+      }
+    }
 
     let joined: LobbyRoom;
-    try {
-      joined = await this.lobbyStore.joinRoom(room.id, {
-        guestName: localName,
-        answerCode
-      });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      if (!message.includes('Room is no longer available')) {
-        throw error;
-      }
-
-      // If the same guest triggered duplicate join attempts, re-claim this room
-      // with the latest answer payload instead of hard-failing.
+    if (relayJoin) {
       const existing = await this.lobbyStore.getRoom(room.id);
       if (!existing || existing.status === 'closed' || (existing.guestName && existing.guestName !== localName)) {
-        throw error;
+        throw new Error('Room is no longer available.');
       }
 
       joined = await this.lobbyStore.updateRoom(room.id, {
         guestName: localName,
-        answerCode,
         status: existing.status === 'started' ? 'started' : 'connected',
+        transportMode: 'relay',
         updatedAt: Date.now(),
         lastHeartbeat: Date.now()
       });
+      this.applyStatus('connected');
+    } else {
+      try {
+        joined = await this.lobbyStore.joinRoom(room.id, {
+          guestName: localName,
+          answerCode: answerCode ?? ''
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (!message.includes('Room is no longer available')) {
+          throw error;
+        }
+
+        // If the same guest triggered duplicate join attempts, re-claim this room
+        // with the latest answer payload instead of hard-failing.
+        const existing = await this.lobbyStore.getRoom(room.id);
+        if (!existing || existing.status === 'closed' || (existing.guestName && existing.guestName !== localName)) {
+          throw error;
+        }
+
+        joined = await this.lobbyStore.updateRoom(room.id, {
+          guestName: localName,
+          answerCode: answerCode ?? existing.answerCode,
+          status: existing.status === 'started' ? 'started' : 'connected',
+          updatedAt: Date.now(),
+          lastHeartbeat: Date.now()
+        });
+      }
     }
 
     this.currentRoom = joined;
+    this.relayOutSeq = 0;
+    this.seenHostRelaySeq = 0;
+    this.seenGuestRelaySeq = 0;
     this.startRoomWatch(room.id);
     this.startHeartbeat();
+    if (this.transportMode === 'relay') {
+      this.send({ type: 'hello', payload: { name: this.localName, role: 'guest' } });
+    }
     return joined;
   }
 
@@ -198,7 +252,11 @@ class OnlineSession {
     if (this.role !== 'host' || !this.currentRoom) {
       throw new Error('Only host can start match.');
     }
-    if (this.status !== 'connected') {
+    if (this.transportMode === 'relay') {
+      if (!this.currentRoom.guestName) {
+        throw new Error('Guest has not joined yet.');
+      }
+    } else if (this.status !== 'connected') {
       throw new Error('Guest is not connected yet.');
     }
 
@@ -206,6 +264,7 @@ class OnlineSession {
     const updated = await this.lobbyStore.updateRoom(this.currentRoom.id, {
       status: 'started',
       seed,
+      transportMode: this.transportMode,
       updatedAt: Date.now(),
       lastHeartbeat: Date.now()
     });
@@ -219,6 +278,15 @@ class OnlineSession {
   async reconnectHost(): Promise<string> {
     if (this.role !== 'host' || !this.currentRoom) {
       throw new Error('Reconnect host is only available in a hosted room.');
+    }
+    if (this.transportMode === 'relay') {
+      await this.lobbyStore.updateRoom(this.currentRoom.id, {
+        transportMode: 'relay',
+        updatedAt: Date.now(),
+        lastHeartbeat: Date.now()
+      });
+      this.applyStatus(this.currentRoom.guestName ? 'connected' : 'signaling');
+      return 'relay-mode';
     }
 
     this.transport?.destroy();
@@ -245,6 +313,16 @@ class OnlineSession {
     if (this.role !== 'guest' || !this.currentRoom) {
       throw new Error('Reconnect join is only available for guest role.');
     }
+    if (this.transportMode === 'relay') {
+      await this.lobbyStore.updateRoom(this.currentRoom.id, {
+        guestName: this.localName,
+        transportMode: 'relay',
+        updatedAt: Date.now(),
+        lastHeartbeat: Date.now()
+      });
+      this.applyStatus('connected');
+      return 'relay-mode';
+    }
 
     const room = await this.lobbyStore.getRoom(this.currentRoom.id);
     if (!room) {
@@ -269,8 +347,9 @@ class OnlineSession {
   }
 
   send(message: NetMessage): boolean {
-    if (!this.transport) {
-      return false;
+    if (this.transportMode === 'relay' || !this.transport) {
+      this.sendRelayMessage(message);
+      return true;
     }
     return this.transport.send(message);
   }
@@ -290,6 +369,35 @@ class OnlineSession {
     this.send({ type: 'ping', payload: { at: Date.now() } });
   }
 
+  private sendRelayMessage(message: NetMessage): void {
+    if (!this.currentRoom || !this.role) {
+      return;
+    }
+
+    this.relayOutSeq += 1;
+    const relay: RelayEnvelope = {
+      seq: this.relayOutSeq,
+      at: Date.now(),
+      from: this.role,
+      message
+    };
+    const patch = this.role === 'host' ? { hostRelay: relay } : { guestRelay: relay };
+
+    void this.lobbyStore
+      .updateRoom(this.currentRoom.id, {
+        ...patch,
+        transportMode: 'relay',
+        updatedAt: Date.now(),
+        lastHeartbeat: Date.now()
+      })
+      .then((room) => {
+        this.currentRoom = room;
+      })
+      .catch(() => {
+        // Relay transport is best-effort through room polling.
+      });
+  }
+
   reset(): void {
     this.stopRoomWatch();
     this.stopHeartbeat();
@@ -298,6 +406,10 @@ class OnlineSession {
     this.role = null;
     this.currentRoom = null;
     this.matchStarted = false;
+    this.transportMode = 'webrtc';
+    this.relayOutSeq = 0;
+    this.seenHostRelaySeq = 0;
+    this.seenGuestRelaySeq = 0;
     this.applyStatus('offline');
   }
 
@@ -327,19 +439,23 @@ class OnlineSession {
         this.applyStatus('disconnected');
       },
       onMessage: (message) => {
-        if (message.type === 'hello') {
-          this.remoteName = message.payload.name;
-        }
-        if (message.type === 'lobbyStart') {
-          this.matchStarted = true;
-          this.listener.onMatchStart?.(message.payload.seed);
-        }
-        if (message.type === 'ping') {
-          this.send({ type: 'pong', payload: { at: message.payload.at } });
-        }
-        this.listener.onMessage?.(message);
+        this.handleInboundMessage(message);
       }
     });
+  }
+
+  private handleInboundMessage(message: NetMessage): void {
+    if (message.type === 'hello') {
+      this.remoteName = message.payload.name;
+    }
+    if (message.type === 'lobbyStart') {
+      this.matchStarted = true;
+      this.listener.onMatchStart?.(message.payload.seed);
+    }
+    if (message.type === 'ping') {
+      this.send({ type: 'pong', payload: { at: message.payload.at } });
+    }
+    this.listener.onMessage?.(message);
   }
 
   private startRoomWatch(roomId: string): void {
@@ -347,11 +463,24 @@ class OnlineSession {
     this.roomWatchStop = this.lobbyStore.watchRoom(roomId, (room) => {
       this.currentRoom = room;
       if (room) {
+        if (room.transportMode === 'relay') {
+          this.transportMode = 'relay';
+          this.transport?.destroy();
+          this.transport = null;
+        }
         this.remoteName = this.role === 'host' ? (room.guestName ?? 'Waiting for guest') : room.hostName;
+        if (this.transportMode === 'relay') {
+          if (this.role === 'host') {
+            this.applyStatus(room.guestName ? 'connected' : 'signaling');
+          } else if (this.role === 'guest') {
+            this.applyStatus('connected');
+          }
+        }
         if (room.status === 'started' && typeof room.seed === 'number' && !this.matchStarted) {
           this.matchStarted = true;
           this.listener.onMatchStart?.(room.seed);
         }
+        this.consumeRelayUpdate(room);
       }
       this.listener.onRoom?.(room);
       void this.consumeRoomUpdate(room);
@@ -390,8 +519,55 @@ class OnlineSession {
     }
   }
 
+  private consumeRelayUpdate(room: LobbyRoom): void {
+    if (this.transportMode !== 'relay' || !this.role) {
+      return;
+    }
+
+    const incoming = this.role === 'host' ? room.guestRelay : room.hostRelay;
+    if (!incoming || typeof incoming.seq !== 'number') {
+      return;
+    }
+
+    if (this.role === 'host') {
+      if (incoming.seq <= this.seenGuestRelaySeq) {
+        return;
+      }
+      this.seenGuestRelaySeq = incoming.seq;
+    } else {
+      if (incoming.seq <= this.seenHostRelaySeq) {
+        return;
+      }
+      this.seenHostRelaySeq = incoming.seq;
+    }
+
+    const relayMessage = this.parseRelayMessage(incoming.message);
+    if (!relayMessage) {
+      return;
+    }
+    this.handleInboundMessage(relayMessage);
+  }
+
+  private parseRelayMessage(payload: unknown): NetMessage | null {
+    if (!payload || typeof payload !== 'object') {
+      return null;
+    }
+    const maybeMessage = payload as Partial<NetMessage>;
+    if (typeof maybeMessage.type !== 'string') {
+      return null;
+    }
+    return payload as NetMessage;
+  }
+
   private async consumeRoomUpdate(room: LobbyRoom | null): Promise<void> {
-    if (!room || this.role !== 'host' || !this.transport) {
+    if (!room) {
+      return;
+    }
+    if (room.transportMode === 'relay') {
+      this.transportMode = 'relay';
+      return;
+    }
+    if (this.role !== 'host' || !this.transport) {
       return;
     }
     if (!room.answerCode || this.acceptedAnswerVersion === room.version) {

@@ -11,6 +11,9 @@ export interface LobbyRoom {
   offerCode: string;
   answerCode?: string;
   seed?: number;
+  transportMode?: 'webrtc' | 'relay';
+  hostRelay?: { seq: number; at: number; message: unknown };
+  guestRelay?: { seq: number; at: number; message: unknown };
   version: number;
   createdAt: number;
   updatedAt: number;
@@ -32,6 +35,7 @@ export interface CreateRoomInput {
   locked: boolean;
   passwordSalt?: string;
   passwordHash?: string;
+  transportMode?: 'webrtc' | 'relay';
 }
 
 export interface JoinRoomInput {
@@ -153,6 +157,7 @@ class LocalStorageLobbyStore implements LobbyStore {
       passwordHash: input.passwordHash,
       status: 'open',
       offerCode: input.offerCode,
+      transportMode: input.transportMode ?? 'webrtc',
       version: 1,
       createdAt: nowMs(),
       updatedAt: nowMs(),
@@ -257,6 +262,7 @@ class FirebaseLobbyStore implements LobbyStore {
       passwordHash: input.passwordHash,
       status: 'open',
       offerCode: input.offerCode,
+      transportMode: input.transportMode ?? 'webrtc',
       version: 1,
       createdAt: nowMs(),
       updatedAt: nowMs(),
