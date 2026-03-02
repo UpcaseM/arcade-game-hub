@@ -52,6 +52,7 @@ const LOBBY_TTL_MS = 120_000;
 const LOCAL_ROOMS_KEY = 'dou_shou_qi_rooms_v1';
 const CONFIG_KEY = 'dou_shou_qi_lobby_provider_v1';
 const BUNDLED_CONFIG_GLOBAL = '__DOU_SHOU_QI_LOBBY_CONFIG__';
+export const LOBBY_PROVIDER_FALLBACK_EVENT = 'dou-shou-qi:lobby-provider-fallback';
 
 export type LobbyProviderConfig = {
   provider: 'firebase-rtdb';
@@ -354,20 +355,50 @@ class FirebaseLobbyStore implements LobbyStore {
     });
 
     if (!response.ok) {
-      throw new Error(`Lobby provider request failed (${response.status}).`);
+      throw new LobbyProviderHttpError(response.status);
     }
 
     return (await response.json()) as T;
   }
 }
 
+class LobbyProviderHttpError extends Error {
+  constructor(readonly status: number) {
+    super(`Lobby provider request failed (${status}).`);
+    this.name = 'LobbyProviderHttpError';
+  }
+}
+
+function dispatchLobbyFallbackSignal(): void {
+  const fallbackEvent =
+    typeof Event === 'function'
+      ? new Event(LOBBY_PROVIDER_FALLBACK_EVENT)
+      : ({ type: LOBBY_PROVIDER_FALLBACK_EVENT } as Event);
+  window.dispatchEvent(fallbackEvent);
+}
+
 function shouldFallbackToLocal(error: unknown): boolean {
+  if (error instanceof LobbyProviderHttpError) {
+    return error.status >= 500;
+  }
+
+  const status = (error as { status?: unknown })?.status;
+  if (typeof status === 'number') {
+    return status >= 500;
+  }
+
   const message = String(error ?? '');
-  return (
-    message.includes('Lobby provider request failed') ||
+  if (
     message.includes('Failed to fetch') ||
-    message.includes('NetworkError')
-  );
+    message.includes('NetworkError') ||
+    message.includes('Network request failed') ||
+    message.includes('fetch failed') ||
+    message.includes('Load failed')
+  ) {
+    return true;
+  }
+
+  return false;
 }
 
 class ResilientLobbyStore implements LobbyStore {
@@ -434,6 +465,7 @@ class ResilientLobbyStore implements LobbyStore {
       this.fallbackUsed = true;
       this.active = this.fallback;
       console.warn('[DouShouQi] Remote lobby unavailable; switching to local-only fallback.');
+      dispatchLobbyFallbackSignal();
       return operation(this.active);
     }
   }

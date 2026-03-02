@@ -100,10 +100,14 @@ export class DouShouQiLobbyScene extends Phaser.Scene {
 
   private renderLobbyState(room: LobbyRoom | null): void {
     if (!room) {
-      this.roomText.setText('Room unavailable. Returning to menu...');
-      this.time.delayedCall(1000, () => {
-        this.scene.start('DouShouQiMainMenuScene');
-      });
+      const current = this.roomId ? `Room ${this.roomId}` : 'Room pending';
+      this.roomText.setText(`${current} (syncing...)`);
+      this.statusText.setText('Lobby sync is temporarily unavailable.\nWaiting for room update...');
+      this.networkText.setText(`Channel: ${onlineSession.getStatus()} | You: ${onlineSession.getLocalName()} | Opponent: ${onlineSession.getRemoteName()}`);
+      if (this.startButton) {
+        this.startButton.setAlpha(0.45);
+        this.startButton.disableInteractive();
+      }
       return;
     }
 

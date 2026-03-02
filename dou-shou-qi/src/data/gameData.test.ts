@@ -127,6 +127,19 @@ describe('movement and capture', () => {
     expect(isValidMove(state, low, 1, 2)).toBe(false);
   });
 
+  it('eliminates both pieces when same rank captures', () => {
+    const state = createEmptyState();
+    const attacker = placeAnimal(state, 'b-wolf', 'Wolf', 3, 'blue', 1, 1);
+    const defender = placeAnimal(state, 'r-wolf', 'Wolf', 3, 'red', 1, 2);
+
+    const result = moveAnimal(state, attacker.id, defender.col, defender.row);
+    expect(result.success).toBe(true);
+    expect(result.capturedAnimal?.id).toBe(defender.id);
+    expect(state.animals[attacker.id]).toBeUndefined();
+    expect(state.animals[defender.id]).toBeUndefined();
+    expect(state.lastAction).toContain('traded');
+  });
+
   it('applies mouse-elephant special capture rule', () => {
     const mouse = placeAnimal(createEmptyState(), 'b-mouse', 'Mouse', 1, 'blue', 0, 0);
     const elephant = placeAnimal(createEmptyState(), 'r-elephant', 'Elephant', 8, 'red', 0, 1);

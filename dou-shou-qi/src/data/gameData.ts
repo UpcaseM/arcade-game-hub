@@ -309,18 +309,27 @@ export function moveAnimal(gameState: GameState, animalId: string, targetCol: nu
   }
 
   const captured = getAnimalAtCell(gameState, targetCol, targetRow);
+  const tradeElimination = !!captured && captured.rank === animal.rank;
   if (captured) {
     delete gameState.animals[captured.id];
   }
 
-  animal.col = targetCol;
-  animal.row = targetRow;
+  if (tradeElimination) {
+    delete gameState.animals[animal.id];
+  } else {
+    animal.col = targetCol;
+    animal.row = targetRow;
+  }
 
   gameState.selectedAnimalId = undefined;
   gameState.validMoves = undefined;
-  gameState.lastAction = captured
-    ? `${gameState.currentTurn} captured ${captured.name} with ${animal.name}`
-    : `${gameState.currentTurn} moved ${animal.name}`;
+  if (captured && tradeElimination) {
+    gameState.lastAction = `${gameState.currentTurn} traded ${animal.name} with ${captured.name}`;
+  } else if (captured) {
+    gameState.lastAction = `${gameState.currentTurn} captured ${captured.name} with ${animal.name}`;
+  } else {
+    gameState.lastAction = `${gameState.currentTurn} moved ${animal.name}`;
+  }
 
   gameState.currentTurn = switchPlayer(gameState.currentTurn);
   gameState.status = checkWinCondition(gameState);

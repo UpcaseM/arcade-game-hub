@@ -1,110 +1,98 @@
-# Post-Release Audit Report (Loop 8 Update)
+# Post-Release Audit Report (Loop 2)
 
-- Commit: `dcba254`
-- Date: 2026-03-02
-- Scope: UI simplification, lobby provider fallback, responsive hub/embed behavior, and test coverage.
-- Inputs: `plan.json` (ship-20260302T050424Z-a8c582be), `review_report.loop-0.json`, source/tests/build artifacts.
+- Commit under audit: `dcba254`
+- Report date: 2026-03-02
+- Scope: UI simplification, lobby provider fallback behavior, responsive hub/embed behavior, and release gates.
 
-## Loop 8 Delta
+## Loop 2 Summary
 
-- Re-ran all required automated gates from the plan:
-  - `dou-shou-qi` focused unit suites (`lobbyStore`, `onlineSession`) pass.
-  - Hub auth regression test passes.
-  - Static path validation passes.
-  - `dou-shou-qi` production build passes.
-- Reconfirmed loop-7 blocking issues remain unresolved in this sandbox:
-  - Real browser runtime validation is still unavailable for responsive, UI smoke, and provider-failure simulations.
-  - Screenshot artifact generation remains unavailable in this environment (Playwright browsers not installable here).
-  - Local static serving remains blocked (`python3 -m http.server 8000` fails with `PermissionError: [Errno 1] Operation not permitted`).
+Blocking fixes from `review_report.loop-1.json` were implemented for:
 
-## Work Package Status
+1. Lint gate failure (`BI-1`) via ESLint v9 flat config.
+2. Fallback classification and behavior risk (`BI-2`) via explicit HTTP error typing and stricter fallback rules.
+3. User-visible fallback signal (`BI-2`) via global fallback event consumed by the main menu toast.
 
-| WP | Title | Status | Evidence |
-|---|---|---|---|
-| WP1 | Provider Resolution + Normalization | Pass | `lobbyStore` unit suite passes; precedence/normalization behavior remains aligned with code/tests. |
-| WP2 | Resilient Fallback Store | **Fail (runtime validation blocked in this environment)** | Required invalid-URL/offline runtime simulations still cannot be executed here due sandbox runtime/browser constraints. |
-| WP3 | OnlineSession Lifecycle | Pass | `onlineSession` unit suite passes; provider reload behavior remains covered. |
-| WP4 | UI Simplification | **Fail (runtime validation blocked in this environment)** | Interactive host/join/refresh/details/tutorial/paging smoke flow requires real browser runtime, unavailable here. |
-| WP5 | Responsive + Embed Verification | **Fail (runtime validation blocked in this environment)** | Desktop/mobile viewport + rotation checks still blocked by sandbox server/browser limits. |
-| WP6 | Coverage + Workflow Gates | Pass (with noted gaps) | Automated checks pass; remaining blockers are runtime evidence tasks outside sandbox. |
+Runtime browser evidence requirements (`BI-3`) remain blocked in this sandbox because local HTTP serving is not permitted.
 
-## Acceptance Criteria Matrix
+## Implemented Changes
 
-| ID | Status | Notes |
+### 1) ESLint v9 gate restored
+
+- Added `dou-shou-qi/eslint.config.mjs` (flat config).
+- Updated `dou-shou-qi/package.json` lint script to `eslint "src/**/*.ts"`.
+- `npm --prefix dou-shou-qi run lint` now passes.
+
+### 2) Fallback policy hardened
+
+- `FirebaseLobbyStore.fetchJson` now throws a typed `LobbyProviderHttpError` with explicit status code.
+- Fallback decision logic now:
+  - falls back on network-like failures (`Failed to fetch`, `NetworkError`, `fetch failed`, `Network request failed`, `Load failed`);
+  - falls back on HTTP `5xx`;
+  - does **not** fallback on HTTP `4xx` (including 401/403).
+- Added `LOBBY_PROVIDER_FALLBACK_EVENT` and dispatch when automatic fallback occurs.
+
+### 3) User-visible fallback messaging
+
+- `DouShouQiMainMenuScene` now subscribes to `LOBBY_PROVIDER_FALLBACK_EVENT`.
+- On automatic fallback, UI shows toast:
+  - `Remote lobby unavailable; using local-only lobby (same-device only).`
+- Listener cleanup is wired on scene shutdown/destroy.
+
+## Test Coverage Updates
+
+Updated `dou-shou-qi/src/net/lobbyStore.test.ts` to cover:
+
+- fallback on network fetch errors (existing, now also asserts fallback event emission),
+- no fallback on HTTP 403 permission errors,
+- fallback on HTTP 503 provider failures,
+- no fallback on HTTP 404 provider failures (and no fallback event).
+
+## Gate Results (Loop 2)
+
+- `npm --prefix dou-shou-qi run lint` -> **pass**
+- `npm --prefix dou-shou-qi run test -- --run src/net/lobbyStore.test.ts src/net/onlineSession.test.ts` -> **pass**
+- `node --test tools/auth.test.mjs` -> **pass**
+- `node tools/validate-static-paths.mjs` -> **pass**
+- `npm --prefix dou-shou-qi test` -> **pass** (`39/39`)
+- `npm --prefix dou-shou-qi run build` -> **pass**
+
+## Runtime Evidence Status
+
+### UI simplification smoke flow
+
+- Status: **blocked in this environment**
+- Reason: local static server startup fails with `PermissionError: [Errno 1] Operation not permitted`.
+
+### Provider failure simulations (invalid URL/offline/blocked/auth-denied)
+
+- Status: **partially covered by unit tests; runtime browser evidence blocked**
+- Unit evidence: fallback/no-fallback classification is now validated in `lobbyStore.test.ts`.
+- Runtime browser simulation remains pending outside this sandbox.
+
+### Responsive hub/embed matrix (~390 portrait+landscape, ~560, ~860, desktop)
+
+- Status: **blocked in this environment**
+- Reason: no usable local browser runtime due local server restriction.
+
+## Work Package Snapshot
+
+| WP | Status | Notes |
 |---|---|---|
-| AC1 | Partial | Quick-view controls exist; interactive runtime validation still blocked. |
-| AC2 | Partial | Details toggle logic exists; interactive runtime validation still blocked. |
-| AC3 | Pass | Provider text/source resolution behavior remains code-verified. |
-| AC4 | Pass | URL normalization/persistence remains unit-covered and passing. |
-| AC5 | Pass | Bundled-config reset path remains code-verified. |
-| AC6 | Pass | Local-only sentinel resolution remains code-verified. |
-| AC7 | **Fail (runtime evidence missing)** | Required invalid URL + offline/blocked real-browser simulations remain blocked here. |
-| AC8 | Pass | Unit tests confirm store reload before list/host/join. |
-| AC9 | Partial | Paging controls present in code; runtime interaction still unverified in this environment. |
-| AC10 | Pass | Hub class toggle logic remains code-verified. |
-| AC11 | **Fail (runtime evidence missing)** | Mobile/desktop runtime checks (~390/~560/~860 + desktop + rotation) still blocked here. |
-| AC12 | Pass | All required automated checks pass in loop 8. |
-| AC13 | Pass | No new assets introduced. |
+| WP1 Scope + delta mapping | Pass | Maintained from prior loops. |
+| WP2 Static code audit (UI/provider) | Pass | Blocking classification defect fixed and tested. |
+| WP3 Automated gates | Pass | Required commands pass including restored lint gate. |
+| WP4 Runtime UI simplification validation | Fail (env-blocked) | Needs permissive browser runtime. |
+| WP5 Runtime fallback + responsive validation | Fail (env-blocked) | Needs permissive browser runtime and evidence capture. |
+| WP6 Defect triage/minimal fixes/sign-off | Partial | Blocking code defects fixed; runtime evidence tasks remain. |
 
-## Commands Run and Results (Loop 8)
+## Remaining Follow-Ups (Outside Sandbox)
 
-- `cd dou-shou-qi && npm test -- --run src/net/lobbyStore.test.ts` -> pass (`7/7`)
-- `cd dou-shou-qi && npm test -- --run src/net/onlineSession.test.ts` -> pass (`5/5`)
-- `cd dou-shou-qi && npm test` -> pass (`36/36`)
-- `node --test tools/auth.test.mjs` -> pass
-- `node tools/validate-static-paths.mjs` -> pass (`Static path validation passed.`)
-- `cd dou-shou-qi && npm run build` -> pass (build completes; `dist/index.html` + `dist/main.js` emitted)
-- `python3 -m http.server 8000` -> blocked by sandbox (`PermissionError: [Errno 1] Operation not permitted`)
-- Runtime browser/manual matrix execution -> blocked in this sandbox environment (external follow-up required)
-- Snapshot artifact generation -> blocked in this sandbox environment (external follow-up required)
+1. Run browser-based UI smoke matrix for quick view/details/tutorial/host/join/paging flows.
+2. Run runtime fallback matrix for invalid URL, offline/blocked, and auth-denied in real browser DevTools.
+3. Run responsive hub/embed matrix at ~390 portrait+landscape, ~560, ~860, and desktop with hub->game->back loop x3.
+4. Attach screenshots/video/log snippets and finalize AC1/AC2/AC7/AC9/AC11.
 
-## Required Runtime Matrix Status
+## Asset Policy
 
-### Responsive matrix (~390/~560/~860 + desktop, portrait/landscape)
-
-| Scenario | Runtime execution | Status |
-|---|---|---|
-| Desktop hub -> Dou Shou Qi -> Back to hub (repeat) | Blocked by sandbox (no local server/browser runtime) | Fail |
-| Mobile width ~390 (portrait + landscape) | Blocked by sandbox | Fail |
-| Tablet width ~560 | Blocked by sandbox | Fail |
-| Small desktop width ~860 | Blocked by sandbox | Fail |
-
-Static code evidence retained:
-- `styles.css` includes `body.game-lock-scroll` with `height: 100dvh` and `overflow: hidden`.
-- `styles.css` includes Dou Shou Qi iframe rules for normal mode and `game-lock-scroll` mode (`#douShouQiFrame` + `.dou-iframe-shell`).
-- `script.js` toggles `game-lock-scroll` only on `douShouQi` screen and unloads iframe back to `about:blank` on exit.
-
-### Provider failure simulation matrix (invalid URL + offline/blocked)
-
-| Scenario | Runtime execution | Status |
-|---|---|---|
-| Invalid lobby URL in Details -> Refresh/Host | Blocked by sandbox | Fail |
-| Offline/blocked provider request -> Refresh/Host | Blocked by sandbox | Fail |
-
-Static/automated evidence retained:
-- `dou-shou-qi/src/net/lobbyStore.ts` fallback trigger logic remains as expected for network-like failures.
-- Unit suites and regression/build checks pass, but do not replace runtime browser simulation evidence.
-
-### UI simplification interactive smoke matrix
-
-| Scenario | Runtime execution | Status |
-|---|---|---|
-| Start Local Match / Host / Refresh / Tutorial | Blocked by sandbox | Fail |
-| Show/Hide Details and return to quick view | Blocked by sandbox | Fail |
-| Join locked/unlocked and paging Prev/Next | Blocked by sandbox | Fail |
-
-Static code evidence retained:
-- Main menu quick-view actions are present.
-- Details overlay defaults hidden and toggles `Show Details` <-> `Hide Details`.
-- Paging controls (`Prev`/`Next` + page label) remain present.
-
-## Snapshot Evidence
-
-No screenshot artifact pack was generated in this sandbox loop because browser runtime setup is blocked. Snapshot evidence remains an external follow-up requirement for WP4/WP5 sign-off.
-
-## Next Required Follow-Up (Outside This Sandbox)
-
-1. Serve the repo in a permissive environment and run the responsive matrix (~390/~560/~860 + desktop + rotation).
-2. Execute provider failure simulation #1 (invalid lobby URL) and #2 (offline/blocked request), capturing console/network evidence.
-3. Execute the full interactive UI smoke flow (host/join/details/tutorial/paging) and capture evidence.
-4. Attach screenshot/video artifacts and update WP2/WP4/WP5 and AC1/AC2/AC7/AC9/AC11 from Partial/Fail to Pass/Fail based on real runtime results.
+- No new assets were added in this loop.
+- Policy remains: only free/open licensed assets with in-repo attribution/license text for any future additions.

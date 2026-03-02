@@ -1,5 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { LobbyRoom, createLobbyStore, isOpenRoom, lobbyTtlMs, normalizeFirebaseDatabaseUrl, saveLobbyProviderConfig } from './lobbyStore';
+import {
+  LOBBY_PROVIDER_FALLBACK_EVENT,
+  LobbyRoom,
+  createLobbyStore,
+  isOpenRoom,
+  lobbyTtlMs,
+  normalizeFirebaseDatabaseUrl,
+  saveLobbyProviderConfig
+} from './lobbyStore';
 
 function room(partial: Partial<LobbyRoom>): LobbyRoom {
   return {
@@ -67,7 +75,8 @@ describe('resilient lobby fallback', () => {
       setTimeout: globalThis.setTimeout.bind(globalThis),
       clearTimeout: globalThis.clearTimeout.bind(globalThis),
       addEventListener: vi.fn(),
-      removeEventListener: vi.fn()
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn()
     });
   });
 
@@ -94,25 +103,86 @@ describe('resilient lobby fallback', () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(warnSpy).toHaveBeenCalledWith('[DouShouQi] Remote lobby unavailable; switching to local-only fallback.');
+    expect(window.dispatchEvent).toHaveBeenCalledTimes(1);
+    const fallbackEvent = vi.mocked(window.dispatchEvent).mock.calls[0]?.[0];
+    expect(fallbackEvent.type).toBe(LOBBY_PROVIDER_FALLBACK_EVENT);
     warnSpy.mockRestore();
   });
 
-  it('does not fallback on non-network errors', async () => {
+  it('does not fallback on permission errors (403)', async () => {
     saveLobbyProviderConfig({
       provider: 'firebase-rtdb',
       databaseUrl: 'https://demo-default-rtdb.firebaseio.com'
     });
 
-    const fetchMock = vi.fn().mockRejectedValue(new Error('forbidden'));
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 403,
+      json: async () => ({ error: 'Permission denied' })
+    });
     vi.stubGlobal('fetch', fetchMock);
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
     const store = createLobbyStore();
-    await expect(store.listOpenRooms()).rejects.toThrow('forbidden');
-    await expect(store.listOpenRooms()).rejects.toThrow('forbidden');
+    await expect(store.listOpenRooms()).rejects.toThrow('Lobby provider request failed (403)');
+    await expect(store.listOpenRooms()).rejects.toThrow('Lobby provider request failed (403)');
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(warnSpy).not.toHaveBeenCalled();
+    expect(window.dispatchEvent).not.toHaveBeenCalled();
+    warnSpy.mockRestore();
+  });
+
+  it('falls back on HTTP 503 provider errors', async () => {
+    saveLobbyProviderConfig({
+      provider: 'firebase-rtdb',
+      databaseUrl: 'https://demo-default-rtdb.firebaseio.com'
+    });
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 503,
+        json: async () => ({ error: 'Service unavailable' })
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({})
+      });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const store = createLobbyStore();
+    await expect(store.listOpenRooms()).resolves.toEqual([]);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(window.dispatchEvent).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not fallback on HTTP 404 provider errors', async () => {
+    saveLobbyProviderConfig({
+      provider: 'firebase-rtdb',
+      databaseUrl: 'https://demo-default-rtdb.firebaseio.com'
+    });
+
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 404,
+      json: async () => ({ error: '404 Not Found' })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const store = createLobbyStore();
+    await expect(store.listOpenRooms()).rejects.toThrow('Lobby provider request failed (404)');
+    await expect(store.createRoom({ hostName: 'Host', offerCode: 'offer', locked: false })).rejects.toThrow(
+      'Lobby provider request failed (404)'
+    );
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(warnSpy).not.toHaveBeenCalled();
+    expect(window.dispatchEvent).not.toHaveBeenCalled();
     warnSpy.mockRestore();
   });
 });

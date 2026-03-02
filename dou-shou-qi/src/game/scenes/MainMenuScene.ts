@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import {
+  LOBBY_PROVIDER_FALLBACK_EVENT,
   LobbyRoomSummary,
   resolveLobbyProviderConfig,
   saveLobbyProviderConfig,
@@ -59,12 +60,23 @@ export class DouShouQiMainMenuScene extends Phaser.Scene {
   private toastTimer?: Phaser.Time.TimerEvent;
   private detailsToggleLabel?: Phaser.GameObjects.Text;
   private detailsObjects: Array<Phaser.GameObjects.Container | Phaser.GameObjects.Rectangle | Phaser.GameObjects.Text> = [];
+  private readonly onLobbyFallback = () => {
+    this.showToast('Remote lobby unavailable; using local-only lobby (same-device only).');
+  };
 
   constructor() {
     super('DouShouQiMainMenuScene');
   }
 
   create(): void {
+    window.addEventListener(LOBBY_PROVIDER_FALLBACK_EVENT, this.onLobbyFallback);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      window.removeEventListener(LOBBY_PROVIDER_FALLBACK_EVENT, this.onLobbyFallback);
+    });
+    this.events.once(Phaser.Scenes.Events.DESTROY, () => {
+      window.removeEventListener(LOBBY_PROVIDER_FALLBACK_EVENT, this.onLobbyFallback);
+    });
+
     const settings = loadUiSettings();
     this.defaultName = readHubIdentity();
 
