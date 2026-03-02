@@ -10,6 +10,31 @@ function decodeSignal<T>(value: string): T {
   return JSON.parse(atob(value)) as T;
 }
 
+function parseSessionDescriptionPayload(encoded: string, label: 'Offer' | 'Answer'): RTCSessionDescriptionInit {
+  const trimmed = encoded.trim();
+  if (!trimmed) {
+    throw new Error(`${label} payload is empty.`);
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = decodeSignal<unknown>(trimmed);
+  } catch {
+    throw new Error(`${label} payload is malformed.`);
+  }
+
+  if (!parsed || typeof parsed !== 'object') {
+    throw new Error(`${label} payload is missing.`);
+  }
+
+  const desc = parsed as RTCSessionDescriptionInit;
+  if (!desc.type || !desc.sdp) {
+    throw new Error(`${label} payload is invalid.`);
+  }
+
+  return desc;
+}
+
 async function waitForIceGathering(pc: RTCPeerConnection): Promise<void> {
   if (pc.iceGatheringState === 'complete') {
     return;
@@ -60,7 +85,11 @@ export class WebRtcManualTransport {
     const offer = await this.pc.createOffer();
     await this.pc.setLocalDescription(offer);
     await waitForIceGathering(this.pc);
-    return encodeSignal(this.pc.localDescription);
+    const localDescription = this.pc.localDescription;
+    if (!localDescription || !localDescription.type || !localDescription.sdp) {
+      throw new Error('Offer generation failed.');
+    }
+    return encodeSignal(localDescription);
   }
 
   async acceptOfferAndCreateAnswer(encodedOffer: string): Promise<string> {
@@ -70,20 +99,24 @@ export class WebRtcManualTransport {
       this.channel = event.channel;
       this.bindChannel(event.channel);
     };
-    const offer = decodeSignal<RTCSessionDescriptionInit>(encodedOffer);
-    await this.pc.setRemoteDescription(new RTCSessionDescription(offer));
+    const offer = parseSessionDescriptionPayload(encodedOffer, 'Offer');
+    await this.pc.setRemoteDescription(offer);
     const answer = await this.pc.createAnswer();
     await this.pc.setLocalDescription(answer);
     await waitForIceGathering(this.pc);
-    return encodeSignal(this.pc.localDescription);
+    const localDescription = this.pc.localDescription;
+    if (!localDescription || !localDescription.type || !localDescription.sdp) {
+      throw new Error('Answer generation failed.');
+    }
+    return encodeSignal(localDescription);
   }
 
   async acceptAnswer(encodedAnswer: string): Promise<void> {
     if (!this.pc) {
       throw new Error('Peer connection is not initialized.');
     }
-    const answer = decodeSignal<RTCSessionDescriptionInit>(encodedAnswer);
-    await this.pc.setRemoteDescription(new RTCSessionDescription(answer));
+    const answer = parseSessionDescriptionPayload(encodedAnswer, 'Answer');
+    await this.pc.setRemoteDescription(answer);
   }
 
   send(message: NetMessage): boolean {
@@ -135,4 +168,3 @@ export class WebRtcManualTransport {
     return this.role;
   }
 }
-
