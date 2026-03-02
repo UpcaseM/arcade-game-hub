@@ -33,7 +33,21 @@ describe('ui settings', () => {
   });
 
   it('persists and reloads settings', () => {
-    saveUiSettings({ reducedMotion: true, colorAssist: false, sound: true });
-    expect(loadUiSettings()).toEqual({ reducedMotion: true, colorAssist: false, sound: true });
+    saveUiSettings({
+      reducedMotion: true,
+      colorAssist: false,
+      musicVolume: 0.5,
+      sfxVolume: 0.4,
+      musicMuted: true,
+      sfxMuted: false
+    });
+    expect(loadUiSettings()).toEqual({
+      reducedMotion: true,
+      colorAssist: false,
+      musicVolume: 0.5,
+      sfxVolume: 0.4,
+      musicMuted: true,
+      sfxMuted: false
+    });
   });
 });

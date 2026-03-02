@@ -24,6 +24,33 @@ This project intentionally uses **flip mode** (暗棋开局), not the standard 7
 - Click a highlighted target to move/capture
 - Back button returns to the game menu
 
+## Online MVP (Backendless)
+
+- Transport: WebRTC DataChannel with manual signaling (copy/paste offer + answer codes)
+- Authority model: host is authoritative for game state validation and snapshots
+- Roles: host controls `player1`, joiner controls `player2`
+- Sync: host sends snapshots after accepted actions; guest applies snapshots
+- Identity: defaults to hub account username (`arcade_active_user_v1`) when available
+- Reconnect: session reset is available from main menu and supports re-signaling flow
+
+### Limitations
+
+- STUN-only (no TURN): strict NAT/firewall setups may fail to connect.
+- Manual signaling UX is intentionally basic for static-site MVP.
+- Client authority/security is demo-grade and not anti-cheat hardened.
+
+## Audio MVP
+
+- Procedural WebAudio background loop (no external files).
+- SFX hooks: flip, move, capture, win.
+- Settings persisted in localStorage:
+  - `musicVolume`
+  - `sfxVolume`
+  - `musicMuted`
+  - `sfxMuted`
+  - `reducedMotion`
+  - `colorAssist`
+
 ## Dev Commands
 
 ```bash

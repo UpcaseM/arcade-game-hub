@@ -1,3 +1,5 @@
+import { createAuthService } from './auth.js';
+
 const STORAGE_KEYS = {
   snakeHighScore: 'arcade_snake_high_score_v2',
   tapBest: 'arcade_tap_blitz_best_v1',
@@ -22,7 +24,155 @@ const douShouQiPath = 'dou-shou-qi/dist/index.html';
 const gameButtons = document.querySelectorAll('[data-open-game]');
 const backButtons = document.querySelectorAll('[data-back-to-menu]');
 
+const accountStatus = document.getElementById('accountStatus');
+const loginBtn = document.getElementById('loginBtn');
+const logoutBtn = document.getElementById('logoutBtn');
+const adminBtn = document.getElementById('adminBtn');
+
+const loginModal = document.getElementById('loginModal');
+const loginUsername = document.getElementById('loginUsername');
+const loginPassword = document.getElementById('loginPassword');
+const loginMessage = document.getElementById('loginMessage');
+const loginSubmitBtn = document.getElementById('loginSubmitBtn');
+const loginCancelBtn = document.getElementById('loginCancelBtn');
+
+const adminModal = document.getElementById('adminModal');
+const adminUsersList = document.getElementById('adminUsersList');
+const adminCreateUsername = document.getElementById('adminCreateUsername');
+const adminCreatePassword = document.getElementById('adminCreatePassword');
+const adminCreateRole = document.getElementById('adminCreateRole');
+const adminMessage = document.getElementById('adminMessage');
+const adminCreateBtn = document.getElementById('adminCreateBtn');
+const adminCloseBtn = document.getElementById('adminCloseBtn');
+
+const auth = createAuthService();
+
 let currentScreen = 'menu';
+
+function setMessage(node, message) {
+  node.textContent = message ?? '';
+}
+
+function openLoginModal() {
+  setMessage(loginMessage, '');
+  loginUsername.value = '';
+  loginPassword.value = '';
+  loginModal.classList.remove('hidden');
+  loginUsername.focus();
+}
+
+function closeLoginModal() {
+  loginModal.classList.add('hidden');
+  loginUsername.value = '';
+  loginPassword.value = '';
+}
+
+function openAdminModal() {
+  setMessage(adminMessage, '');
+  renderAdminUsers();
+  adminModal.classList.remove('hidden');
+}
+
+function closeAdminModal() {
+  adminModal.classList.add('hidden');
+  adminCreateUsername.value = '';
+  adminCreatePassword.value = '';
+  adminCreateRole.value = 'player';
+}
+
+function renderAccountUi() {
+  const user = auth.getCurrentUser();
+  if (!user) {
+    accountStatus.textContent = 'Guest';
+    loginBtn.classList.remove('hidden');
+    logoutBtn.classList.add('hidden');
+    adminBtn.classList.add('hidden');
+    return;
+  }
+
+  accountStatus.textContent = `${user.username} (${user.role})`;
+  loginBtn.classList.add('hidden');
+  logoutBtn.classList.remove('hidden');
+  if (user.role === 'admin') {
+    adminBtn.classList.remove('hidden');
+  } else {
+    adminBtn.classList.add('hidden');
+  }
+}
+
+function renderAdminUsers() {
+  const users = auth.listUsers();
+  adminUsersList.innerHTML = '';
+  users.forEach(user => {
+    const row = document.createElement('article');
+    row.className = 'admin-user';
+    row.innerHTML = `
+      <div class="admin-user-head">
+        <strong>${user.username}</strong>
+        <span>${user.role}</span>
+      </div>
+      <div class="admin-user-ops">
+        <select data-role-input>
+          <option value="player" ${user.role === 'player' ? 'selected' : ''}>player</option>
+          <option value="admin" ${user.role === 'admin' ? 'selected' : ''}>admin</option>
+        </select>
+        <input data-pass-input type="password" placeholder="new password (optional)" />
+        <button type="button" data-update-btn>Update</button>
+        <button type="button" data-delete-btn class="secondary-btn">Delete</button>
+      </div>
+    `;
+
+    const roleInput = row.querySelector('[data-role-input]');
+    const passInput = row.querySelector('[data-pass-input]');
+    const updateBtn = row.querySelector('[data-update-btn]');
+    const deleteBtn = row.querySelector('[data-delete-btn]');
+
+    updateBtn.addEventListener('click', async () => {
+      const result = await auth.updateUser(user.id, {
+        role: roleInput.value,
+        password: passInput.value
+      });
+      passInput.value = '';
+      if (!result.ok) {
+        setMessage(adminMessage, result.reason);
+        return;
+      }
+      setMessage(adminMessage, `Updated ${user.username}.`);
+      renderAccountUi();
+      renderAdminUsers();
+    });
+
+    deleteBtn.addEventListener('click', async () => {
+      const confirmed = window.confirm(`Delete ${user.username}?`);
+      if (!confirmed) {
+        return;
+      }
+      const result = await auth.deleteUser(user.id);
+      if (!result.ok) {
+        setMessage(adminMessage, result.reason);
+        return;
+      }
+      setMessage(adminMessage, `Deleted ${user.username}.`);
+      renderAccountUi();
+      renderAdminUsers();
+    });
+
+    adminUsersList.appendChild(row);
+  });
+}
+
+async function submitLogin() {
+  const username = loginUsername.value;
+  const password = loginPassword.value;
+  const result = await auth.login(username, password);
+  loginPassword.value = '';
+  if (!result.ok) {
+    setMessage(loginMessage, result.reason);
+    return;
+  }
+  renderAccountUi();
+  closeLoginModal();
+}
 
 function getStoredNumber(key) {
   const value = Number(localStorage.getItem(key));
@@ -860,6 +1010,56 @@ colorResetButton.addEventListener('click', () => {
 });
 
 function init() {
+  void auth.ensureSeeded().then(() => {
+    renderAccountUi();
+  });
+
+  loginBtn.addEventListener('click', openLoginModal);
+  logoutBtn.addEventListener('click', () => {
+    auth.logout();
+    renderAccountUi();
+    closeAdminModal();
+  });
+  adminBtn.addEventListener('click', openAdminModal);
+
+  loginSubmitBtn.addEventListener('click', () => {
+    void submitLogin();
+  });
+  loginCancelBtn.addEventListener('click', closeLoginModal);
+  loginPassword.addEventListener('keydown', event => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      void submitLogin();
+    }
+  });
+  loginModal.addEventListener('click', event => {
+    if (event.target === loginModal) {
+      closeLoginModal();
+    }
+  });
+
+  adminCreateBtn.addEventListener('click', async () => {
+    const result = await auth.createUser({
+      username: adminCreateUsername.value,
+      password: adminCreatePassword.value,
+      role: adminCreateRole.value
+    });
+    adminCreatePassword.value = '';
+    if (!result.ok) {
+      setMessage(adminMessage, result.reason);
+      return;
+    }
+    adminCreateUsername.value = '';
+    setMessage(adminMessage, `Created ${result.user.username}.`);
+    renderAdminUsers();
+  });
+  adminCloseBtn.addEventListener('click', closeAdminModal);
+  adminModal.addEventListener('click', event => {
+    if (event.target === adminModal) {
+      closeAdminModal();
+    }
+  });
+
   snakeHighScore = getStoredNumber(STORAGE_KEYS.snakeHighScore);
   tapBest = getStoredNumber(STORAGE_KEYS.tapBest);
   colorBest = getStoredNumber(STORAGE_KEYS.colorBest);

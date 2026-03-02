@@ -21,6 +21,7 @@ A modern browser-based game hub built with plain HTML, CSS, and JavaScript.
   - Weapon instances, attachment slots, and stat modifiers
   - Loot drops, inventory, crafting, and local save data
 - Best-score persistence via `localStorage`
+- Hub auth/admin MVP with local credential store (PBKDF2-hashed passwords), login/logout, and admin user CRUD
 - Responsive layout optimized for desktop and touch devices
 
 ## Project Structure
@@ -60,6 +61,7 @@ cd dou-shou-qi
 npm ci
 npm run build
 cd ..
+node --test tools/auth.test.mjs
 node tools/validate-static-paths.mjs
 ```
 
@@ -186,6 +188,6 @@ window.__alienArenaQa.events()
 - Lucide Icons (`alien-arena/assets/game/icons/lucide/...`) for upgrade UI/FX badges:
   - Project: https://github.com/lucide-icons/lucide
   - License: ISC (`alien-arena-phaser/public/assets/game/icons/lucide/LICENSE`)
-- Dou Shou Qi currently uses procedural/text-rendered assets only (no external art/audio files).
+- Dou Shou Qi currently uses procedural/text-rendered assets and procedural WebAudio (no external art/audio files).
 
 When adding future assets, use free/open licenses only (CC0, CC-BY, CC-BY-SA, ISC, MIT, etc.) and add attribution + source URL + license text in-repo.

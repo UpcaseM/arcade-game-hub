@@ -13,6 +13,13 @@
       <p class="eyebrow">OpenClaw Arcade</p>
       <h1>Game Hub</h1>
       <p class="hero-copy">Jump into fast mini-games with a polished, mobile-friendly experience.</p>
+      <div class="account-strip" aria-live="polite">
+        <span id="accountStatus">Guest</span>
+        <button id="loginBtn" type="button" class="ghost-btn">Login</button>
+        <button id="logoutBtn" type="button" class="ghost-btn hidden">Logout</button>
+        <button id="adminBtn" type="button" class="ghost-btn hidden">Admin</button>
+      </div>
+      <p class="account-note">Demo auth only: credentials are stored locally in this browser.</p>
     </header>
 
     <section id="menuScreen" class="screen screen-active" aria-label="Game menu">
@@ -194,6 +201,56 @@
     </section>
   </main>
 
-  <script src="script.js" defer></script>
+  <section id="loginModal" class="modal hidden" aria-label="Login dialog">
+    <div class="modal-panel">
+      <h2>Account Login</h2>
+      <p>Default admin: <code>admin</code> / <code>admin123</code></p>
+      <label>
+        Username
+        <input id="loginUsername" type="text" autocomplete="username" />
+      </label>
+      <label>
+        Password
+        <input id="loginPassword" type="password" autocomplete="current-password" />
+      </label>
+      <p id="loginMessage" class="modal-message"></p>
+      <div class="modal-actions">
+        <button id="loginSubmitBtn" type="button">Sign In</button>
+        <button id="loginCancelBtn" type="button" class="secondary-btn">Cancel</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="adminModal" class="modal hidden" aria-label="Admin user management">
+    <div class="modal-panel admin-panel">
+      <h2>User Admin</h2>
+      <p>Create/update/delete local users. Plaintext passwords are never stored.</p>
+      <div id="adminUsersList" class="admin-users"></div>
+      <hr />
+      <h3>Create User</h3>
+      <label>
+        Username
+        <input id="adminCreateUsername" type="text" />
+      </label>
+      <label>
+        Password
+        <input id="adminCreatePassword" type="password" />
+      </label>
+      <label>
+        Role
+        <select id="adminCreateRole">
+          <option value="player">player</option>
+          <option value="admin">admin</option>
+        </select>
+      </label>
+      <p id="adminMessage" class="modal-message"></p>
+      <div class="modal-actions">
+        <button id="adminCreateBtn" type="button">Create</button>
+        <button id="adminCloseBtn" type="button" class="secondary-btn">Close</button>
+      </div>
+    </div>
+  </section>
+
+  <script type="module" src="script.js"></script>
 </body>
 </html>

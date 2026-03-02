@@ -13,6 +13,9 @@ import {
   moveAnimal
 } from '../../data/gameData';
 import { Animal, GameState, PlayerTurn } from '../../data/types';
+import { applyHostAction, cloneState, OnlineActionRequest } from '../../net/protocol';
+import { onlineSession } from '../../net/onlineSession';
+import { AudioEngine } from '../audio/AudioEngine';
 import { HudView } from '../ui/HudView';
 import { PieceView } from '../ui/PieceView';
 import { WinOverlay } from '../ui/WinOverlay';
@@ -30,10 +33,13 @@ const PLAYER_LABEL: Record<PlayerTurn, string> = {
   player2: 'Player 2'
 };
 
+type SceneMode = 'local' | 'online';
+
 export class DouShouQiGameScene extends Phaser.Scene {
   private gameState!: GameState;
   private boardGraphics!: Phaser.GameObjects.Graphics;
   private boardCue!: Phaser.GameObjects.Rectangle;
+  private networkText!: Phaser.GameObjects.Text;
 
   private readonly pieceViews = new Map<string, PieceView>();
   private moveHintRects: Phaser.GameObjects.Rectangle[] = [];
@@ -42,18 +48,29 @@ export class DouShouQiGameScene extends Phaser.Scene {
   private hudView!: HudView;
   private winOverlay!: WinOverlay;
   private settings!: UiSettings;
+  private audio!: AudioEngine;
 
   private actionLocked = false;
   private selectionPulse?: Phaser.Tweens.Tween;
+  private mode: SceneMode = 'local';
+  private localTurn: PlayerTurn = 'player1';
+  private awaitingSnapshot = false;
 
   constructor() {
     super('DouShouQiGameScene');
   }
 
-  init(): void {
-    this.gameState = createInitialGameState();
+  init(data: { mode?: SceneMode }): void {
+    this.mode = data?.mode ?? 'local';
     this.settings = loadUiSettings();
+    this.audio = new AudioEngine(this.settings);
     this.actionLocked = false;
+    this.awaitingSnapshot = this.mode === 'online' && onlineSession.getRole() === 'guest';
+    this.localTurn = this.mode === 'online' ? onlineSession.localTurn() : 'player1';
+    this.gameState = createInitialGameState();
+    if (this.awaitingSnapshot) {
+      this.gameState.lastAction = 'Waiting for host snapshot...';
+    }
   }
 
   create(): void {
@@ -62,6 +79,7 @@ export class DouShouQiGameScene extends Phaser.Scene {
     this.syncPieceViewsToState();
     this.renderHud();
     this.setupInput();
+    this.bindOnlineSession();
   }
 
   private createBoard(): void {
@@ -70,8 +88,16 @@ export class DouShouQiGameScene extends Phaser.Scene {
     const width = BOARD_COLS * CELL_SIZE;
     const height = BOARD_ROWS * CELL_SIZE;
 
-    this.boardGraphics.fillStyle(NEUTRAL_COLORS.boardBg, 1);
-    this.boardGraphics.fillRect(BOARD_OFFSET_X, BOARD_OFFSET_Y, width, height);
+    this.boardGraphics.fillGradientStyle(0x0f172a, 0x111827, 0x1e293b, 0x0f172a, 1);
+    this.boardGraphics.fillRect(BOARD_OFFSET_X - 14, BOARD_OFFSET_Y - 14, width + 28, height + 28);
+
+    for (let row = 0; row < BOARD_ROWS; row += 1) {
+      for (let col = 0; col < BOARD_COLS; col += 1) {
+        const shade = (row + col) % 2 === 0 ? 0x0b1220 : 0x111d32;
+        this.boardGraphics.fillStyle(shade, 1);
+        this.boardGraphics.fillRect(BOARD_OFFSET_X + col * CELL_SIZE, BOARD_OFFSET_Y + row * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+      }
+    }
 
     this.boardGraphics.lineStyle(3, NEUTRAL_COLORS.boardOuter, 1);
     this.boardGraphics.strokeRect(BOARD_OFFSET_X, BOARD_OFFSET_Y, width, height);
@@ -100,27 +126,29 @@ export class DouShouQiGameScene extends Phaser.Scene {
     this.hudView = new HudView(this);
     this.winOverlay = new WinOverlay(this);
 
-    const assistText = this.settings.colorAssist ? 'Color-assist on' : 'Color-assist off';
-    const motionText = this.settings.reducedMotion ? 'Reduced motion on' : 'Reduced motion off';
-
-    this.add.text(24, 612, `${assistText} | ${motionText}`, {
-      fontFamily: 'Arial',
-      fontSize: '14px',
-      color: '#94a3b8'
-    });
-
-    const backButton = this.add.text(24, 634, '← Back to Menu', {
+    const backButton = this.add.text(24, 620, '< Back to Menu', {
       fontFamily: 'Arial',
       fontSize: '20px',
       color: '#3b82f6'
     });
     backButton.setInteractive({ useHandCursor: true });
-    backButton.on('pointerdown', () => this.scene.start('DouShouQiMainMenuScene'));
+    backButton.on('pointerdown', () => {
+      onlineSession.setListener({});
+      this.scene.start('DouShouQiMainMenuScene');
+    });
+
+    this.networkText = this.add.text(24, 646, '', {
+      fontFamily: 'Arial',
+      fontSize: '14px',
+      color: '#94a3b8'
+    });
   }
 
   private setupInput(): void {
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
-      if (this.actionLocked || this.gameState.status !== 'playing') {
+      this.audio.unlock();
+
+      if (this.actionLocked || this.gameState.status !== 'playing' || this.awaitingSnapshot) {
         return;
       }
 
@@ -134,11 +162,104 @@ export class DouShouQiGameScene extends Phaser.Scene {
     });
   }
 
+  private bindOnlineSession(): void {
+    if (this.mode !== 'online') {
+      this.updateNetworkText();
+      return;
+    }
+
+    onlineSession.setListener({
+      onStatus: () => {
+        this.updateNetworkText();
+      },
+      onMessage: (message) => {
+        if (message.type === 'actionRequest' && onlineSession.getRole() === 'host') {
+          const actorTurn = onlineSession.remoteTurn();
+          const result = applyHostAction(this.gameState, actorTurn, message.payload);
+          onlineSession.send({
+            type: 'actionResult',
+            payload: { accepted: result.success, reason: result.success ? undefined : result.reason }
+          });
+          if (result.success) {
+            this.audio.play(message.payload.type === 'move' && result.capturedAnimal ? 'capture' : message.payload.type);
+            this.afterStateMutation();
+          }
+          this.broadcastSnapshot();
+        }
+
+        if (message.type === 'actionResult' && !message.payload.accepted) {
+          this.gameState.lastAction = message.payload.reason ?? 'Action rejected by host.';
+          this.renderHud();
+        }
+
+        if (message.type === 'stateSnapshot' && onlineSession.getRole() === 'guest') {
+          this.awaitingSnapshot = false;
+          this.gameState = cloneState(message.payload.state);
+          this.syncPieceViewsToState();
+          this.renderHud();
+          this.updateNetworkText(message.payload.hostName, message.payload.guestName);
+        }
+      }
+    });
+
+    this.updateNetworkText();
+    if (onlineSession.getRole() === 'host' && onlineSession.getStatus() === 'connected') {
+      this.broadcastSnapshot();
+    }
+  }
+
+  private updateNetworkText(hostName?: string, guestName?: string): void {
+    if (this.mode !== 'online') {
+      this.networkText.setText('Local match');
+      return;
+    }
+
+    const status = onlineSession.getStatus();
+    const local = onlineSession.getLocalName();
+    const remote = onlineSession.getRemoteName();
+    const host = hostName ?? (onlineSession.getRole() === 'host' ? local : remote);
+    const guest = guestName ?? (onlineSession.getRole() === 'guest' ? local : remote);
+    this.networkText.setText(`Online ${status} | You: ${local} | Opponent: ${remote} | Host ${host} / Guest ${guest}`);
+  }
+
+  private broadcastSnapshot(): void {
+    if (this.mode !== 'online' || onlineSession.getRole() !== 'host') {
+      return;
+    }
+    onlineSession.sendSnapshot({
+      state: cloneState(this.gameState),
+      hostName: onlineSession.getLocalName(),
+      guestName: onlineSession.getRemoteName()
+    });
+  }
+
   private async handleCellTap(col: number, row: number): Promise<void> {
+    if (this.mode === 'online') {
+      if (onlineSession.getStatus() !== 'connected') {
+        this.gameState.lastAction = 'Connection not ready. Use Reconnect from menu.';
+        this.renderHud();
+        return;
+      }
+      if (this.gameState.currentTurn !== this.localTurn) {
+        this.gameState.lastAction = 'Wait for opponent turn.';
+        this.renderHud();
+        return;
+      }
+    }
+
     const piece = getAnimalAtCell(this.gameState, col, row);
 
     if (piece?.hidden) {
+      if (this.mode === 'online' && onlineSession.getRole() === 'guest') {
+        onlineSession.requestAction({ type: 'flip', pieceId: piece.id });
+        this.gameState.lastAction = 'Flip requested...';
+        this.renderHud();
+        return;
+      }
       await this.handleFlip(piece);
+      if (this.mode === 'online') {
+        this.broadcastSnapshot();
+      }
       return;
     }
 
@@ -153,6 +274,9 @@ export class DouShouQiGameScene extends Phaser.Scene {
 
       const moved = await this.handleMove(selectedPiece, col, row);
       if (moved) {
+        if (this.mode === 'online') {
+          this.broadcastSnapshot();
+        }
         return;
       }
 
@@ -170,8 +294,11 @@ export class DouShouQiGameScene extends Phaser.Scene {
   }
 
   private async handleFlip(piece: Animal): Promise<void> {
-    this.actionLocked = true;
+    if (this.mode === 'online' && onlineSession.getRole() === 'guest') {
+      return;
+    }
 
+    this.actionLocked = true;
     const result = flipAnimal(this.gameState, piece.id);
     if (!result.success) {
       this.gameState.lastAction = result.reason;
@@ -181,7 +308,6 @@ export class DouShouQiGameScene extends Phaser.Scene {
     }
 
     this.clearSelection();
-
     const view = this.pieceViews.get(piece.id);
     if (view) {
       await playFlipReveal(
@@ -195,21 +321,27 @@ export class DouShouQiGameScene extends Phaser.Scene {
       );
     }
 
-    this.syncPieceViewsToState();
-    this.renderHud();
-
-    flashCells(this, [{ col: piece.col, row: piece.row }], this.cellCenter, 0x38bdf8, this.settings.reducedMotion);
-    this.pulseBoardCue();
-    this.showTurnCue();
-
-    if (result.winStatus && result.winStatus !== 'playing') {
-      this.showResult();
-    }
-
+    this.audio.play('flip');
+    this.afterStateMutation();
     this.actionLocked = false;
   }
 
   private async handleMove(selectedPiece: Animal, targetCol: number, targetRow: number): Promise<boolean> {
+    if (this.mode === 'online' && onlineSession.getRole() === 'guest') {
+      const action: OnlineActionRequest = {
+        type: 'move',
+        pieceId: selectedPiece.id,
+        targetCol,
+        targetRow
+      };
+      const sent = onlineSession.requestAction(action);
+      if (sent) {
+        this.gameState.lastAction = 'Move requested...';
+        this.renderHud();
+      }
+      return false;
+    }
+
     const movingView = this.pieceViews.get(selectedPiece.id);
     if (!movingView) {
       return false;
@@ -231,7 +363,6 @@ export class DouShouQiGameScene extends Phaser.Scene {
 
     const trailColor = moverColor ? getPlayerIdentity(moverColor).primaryColor : 0x38bdf8;
     showMoveTrail(this, fromPoint, toPoint, trailColor, this.settings.reducedMotion);
-
     await playMoveTween(this, movingView.container, toPoint.x, toPoint.y, this.settings.reducedMotion);
 
     const capturedId = result.capturedAnimal?.id;
@@ -240,31 +371,25 @@ export class DouShouQiGameScene extends Phaser.Scene {
       if (capturedView) {
         await playCaptureImpact(this, toPoint, capturedView.container, this.settings.reducedMotion);
       }
+      this.audio.play('capture');
+    } else {
+      this.audio.play('move');
     }
 
-    this.syncPieceViewsToState();
-    this.renderHud();
-
-    flashCells(
-      this,
-      [
-        { col: fromCol, row: fromRow },
-        { col: targetCol, row: targetRow }
-      ],
-      this.cellCenter,
-      0xf59e0b,
-      this.settings.reducedMotion
-    );
-
-    this.pulseBoardCue();
-    this.showTurnCue();
-
-    if (result.winStatus && result.winStatus !== 'playing') {
-      this.showResult();
-    }
-
+    this.afterStateMutation();
     this.actionLocked = false;
     return true;
+  }
+
+  private afterStateMutation(): void {
+    this.syncPieceViewsToState();
+    this.renderHud();
+    this.pulseBoardCue();
+    this.showTurnCue();
+    if (this.gameState.status !== 'playing') {
+      this.audio.play('win');
+      this.showResult();
+    }
   }
 
   private selectPiece(piece: Animal): void {
@@ -297,7 +422,6 @@ export class DouShouQiGameScene extends Phaser.Scene {
         view.setScale(1);
         return;
       }
-
       this.selectionPulse = startSelectionPulse(this, view.container, this.settings.reducedMotion);
     });
   }
@@ -311,17 +435,13 @@ export class DouShouQiGameScene extends Phaser.Scene {
 
   private renderMoveHints(): void {
     this.clearMoveHints();
-
     (this.gameState.validMoves ?? []).forEach(({ col, row }) => {
       const { x, y } = this.cellCenter(col, row);
-
       const cell = this.add.rectangle(x, y, CELL_SIZE - 14, CELL_SIZE - 14, 0x22c55e, 0.14);
       cell.setStrokeStyle(2, 0x4ade80, 0.92);
       cell.setDepth(2);
-
       const dot = this.add.circle(x, y, 6, 0x86efac, 0.95);
       dot.setDepth(3);
-
       this.moveHintRects.push(cell);
       this.moveHintDots.push(dot);
     });
@@ -358,20 +478,25 @@ export class DouShouQiGameScene extends Phaser.Scene {
   }
 
   private renderHud(): void {
-    this.hudView.update(this.gameState);
+    this.hudView.update(this.gameState, {
+      compact: true,
+      mode: this.mode,
+      localTurn: this.localTurn,
+      localName: this.mode === 'online' ? onlineSession.getLocalName() : 'Local',
+      remoteName: this.mode === 'online' ? onlineSession.getRemoteName() : 'Opponent',
+      status: this.mode === 'online' ? onlineSession.getStatus() : 'offline'
+    });
   }
 
   private pulseBoardCue(): void {
     this.boardCue.setAlpha(0.85);
     this.boardCue.setStrokeStyle(3, 0xfacc15, 0.9);
-
     this.tweens.add({
       targets: this.boardCue,
       alpha: 0,
       duration: this.settings.reducedMotion ? 120 : 220,
       ease: 'Quad.easeOut'
     });
-
     this.hudView.pulseTurnChip(this, this.settings.reducedMotion);
   }
 
@@ -384,6 +509,7 @@ export class DouShouQiGameScene extends Phaser.Scene {
       identity?.textColor ?? '#e2e8f0',
       this.settings.reducedMotion
     );
+    flashCells(this, [{ col: 0, row: 0 }], this.cellCenter, identity?.primaryColor ?? 0x38bdf8, this.settings.reducedMotion);
   }
 
   private showResult(): void {
@@ -411,3 +537,4 @@ export class DouShouQiGameScene extends Phaser.Scene {
     };
   }
 }
+
