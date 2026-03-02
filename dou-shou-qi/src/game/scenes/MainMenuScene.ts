@@ -33,10 +33,6 @@ function readHubIdentity(): string {
   }
 }
 
-function clampVolume(value: number): number {
-  return Math.max(0, Math.min(1, Number(value.toFixed(2))));
-}
-
 function trimDisplay(value: string, max = 60): string {
   return value.length <= max ? value : `${value.slice(0, max - 3)}...`;
 }
@@ -52,6 +48,7 @@ export class DouShouQiMainMenuScene extends Phaser.Scene {
   private roomPageText?: Phaser.GameObjects.Text;
   private defaultName = 'Guest';
   private focusedField: InputField | null = null;
+  private detailsVisible = false;
   private nameField?: InputField;
   private hostPasswordField?: InputField;
   private joinPasswordField?: InputField;
@@ -60,6 +57,8 @@ export class DouShouQiMainMenuScene extends Phaser.Scene {
   private providerText?: Phaser.GameObjects.Text;
   private toastText?: Phaser.GameObjects.Text;
   private toastTimer?: Phaser.Time.TimerEvent;
+  private detailsToggleLabel?: Phaser.GameObjects.Text;
+  private detailsObjects: Array<Phaser.GameObjects.Container | Phaser.GameObjects.Rectangle | Phaser.GameObjects.Text> = [];
 
   constructor() {
     super('DouShouQiMainMenuScene');
@@ -73,44 +72,34 @@ export class DouShouQiMainMenuScene extends Phaser.Scene {
 
     this.add.rectangle(500, 325, 1000, 650, 0x112211, 1);
     this.add.rectangle(500, 325, 948, 590, 0x1d2e1b, 0.94).setStrokeStyle(2, 0x365f38, 1);
+    this.add.rectangle(265, 355, 350, 458, 0x0f1f12, 0.38).setStrokeStyle(1, 0x365f38, 0.7);
+    this.add.rectangle(724, 355, 534, 458, 0x0f1f12, 0.38).setStrokeStyle(1, 0x365f38, 0.7);
 
     this.add.text(500, 60, 'Dou Shou Qi', {
-      fontSize: '54px',
+      fontSize: '48px',
       color: '#f0fdf4',
       fontFamily: 'Arial'
     }).setOrigin(0.5);
     this.add.text(500, 106, 'Forest Lobby + Local Mode', {
-      fontSize: '20px',
+      fontSize: '19px',
       color: '#bbf7d0',
       fontFamily: 'Arial'
     }).setOrigin(0.5);
 
-    this.nameField = this.createInputField(76, 154, 320, 'Player Name', this.defaultName);
-    this.hostPasswordField = this.createInputField(76, 220, 320, 'Host Room Password (optional)', '', true);
-    this.joinPasswordField = this.createInputField(76, 286, 320, 'Join Password (if room is locked)', '', true);
+    this.add.text(82, 136, 'Quick Start', {
+      fontFamily: 'Arial',
+      fontSize: '24px',
+      color: '#dcfce7'
+    });
+    this.nameField = this.createInputField(82, 166, 330, 'Player Name', this.defaultName);
+    this.hostPasswordField = this.createInputField(82, 232, 330, 'Host Room Password (optional)', '', true);
+    this.joinPasswordField = this.createInputField(82, 298, 330, 'Join Password (if room is locked)', '', true);
 
-    this.providerUrlField = this.createInputField(
-      76,
-      384,
-      320,
-      'Lobby URL (Firebase RTDB)',
-      resolvedProvider.config?.databaseUrl ?? ''
-    );
-    this.providerTokenField = this.createInputField(
-      76,
-      450,
-      320,
-      'Lobby Auth Token (optional)',
-      resolvedProvider.config?.authToken ?? '',
-      true,
-      200
-    );
-
-    this.makeActionButton(430, 166, 'Start Local Match', async () => {
+    this.makeActionButton(82, 364, 'Start Local Match', async () => {
       this.scene.start('DouShouQiGameScene', { mode: 'local' as const });
     });
 
-    this.makeActionButton(430, 214, 'Host Room', async () => {
+    this.makeActionButton(82, 412, 'Host Room', async () => {
       const name = this.nameField?.value.trim() ?? '';
       if (!name) {
         this.showToast('Enter a player name first.');
@@ -126,11 +115,104 @@ export class DouShouQiMainMenuScene extends Phaser.Scene {
       }
     });
 
-    this.makeActionButton(430, 262, 'Refresh Room List', async () => {
+    this.makeActionButton(82, 460, 'Refresh Room List', async () => {
       await this.refreshRooms();
     });
 
-    this.makeActionButton(430, 394, 'Save Lobby Provider', async () => {
+    this.detailsToggleLabel = this.makeActionButton(82, 508, 'Show Details', async () => {
+      this.setDetailsVisible(!this.detailsVisible);
+    });
+
+    this.makeActionButton(82, 556, 'Tutorial', async () => {
+      this.scene.start('DouShouQiTutorialScene');
+    });
+
+    this.add.text(724, 142, 'Open Rooms', {
+      fontFamily: 'Arial',
+      fontSize: '34px',
+      color: '#ecfdf5'
+    }).setOrigin(0.5);
+
+    this.add.text(724, 176, 'Host creates room. Guest taps Join with password only if locked.', {
+      fontFamily: 'Arial',
+      fontSize: '14px',
+      color: '#bef264',
+      wordWrap: { width: 480 },
+      align: 'center'
+    }).setOrigin(0.5);
+
+    this.roomsContainer = this.add.container(464, 216);
+    this.prevRoomsButton = this.makePageButton(520, 186, 'Prev', -1);
+    this.nextRoomsButton = this.makePageButton(920, 186, 'Next', 1);
+    this.roomPageText = this.add.text(724, 186, 'Page 1/1', {
+      fontFamily: 'Arial',
+      fontSize: '14px',
+      color: '#bbf7d0'
+    }).setOrigin(0.5);
+
+    this.providerText = this.add.text(500, 627, '', {
+      fontSize: '14px',
+      color: '#a7f3d0',
+      fontFamily: 'Arial'
+    }).setOrigin(0.5);
+
+    this.toastText = this.add.text(500, 28, '', {
+      fontFamily: 'Arial',
+      fontSize: '16px',
+      color: '#fef9c3',
+      backgroundColor: '#14532d',
+      padding: { x: 8, y: 4 }
+    }).setOrigin(0.5);
+    this.toastText.setDepth(80);
+    this.toastText.setVisible(false);
+
+    const detailsBackdrop = this.add.rectangle(500, 325, 1000, 650, 0x000000, 0.72);
+    detailsBackdrop.setDepth(60);
+    detailsBackdrop.setInteractive();
+    detailsBackdrop.on('pointerdown', () => {
+      this.focusInput(null);
+    });
+
+    const detailsPanel = this.add.rectangle(500, 336, 760, 432, 0x122215, 0.98).setStrokeStyle(2, 0x4f774f, 1);
+    detailsPanel.setDepth(61);
+
+    const detailsTitle = this.add.text(500, 156, 'Details & Network Settings', {
+      fontFamily: 'Arial',
+      fontSize: '34px',
+      color: '#dcfce7'
+    }).setOrigin(0.5);
+    detailsTitle.setDepth(62);
+
+    const detailsHint = this.add.text(500, 194, 'Use this only when you need remote lobby provider or accessibility presets.', {
+      fontFamily: 'Arial',
+      fontSize: '15px',
+      color: '#bbf7d0',
+      wordWrap: { width: 690 },
+      align: 'center'
+    }).setOrigin(0.5);
+    detailsHint.setDepth(62);
+
+    this.providerUrlField = this.createInputField(
+      186,
+      220,
+      628,
+      'Lobby URL (Firebase RTDB)',
+      resolvedProvider.config?.databaseUrl ?? ''
+    );
+    this.providerUrlField.container.setDepth(62);
+
+    this.providerTokenField = this.createInputField(
+      186,
+      286,
+      628,
+      'Lobby Auth Token (optional)',
+      resolvedProvider.config?.authToken ?? '',
+      true,
+      220
+    );
+    this.providerTokenField.container.setDepth(62);
+
+    const saveProviderButton = this.makeDetailsButton(186, 354, 'Save Lobby Provider', async () => {
       const databaseUrl = this.providerUrlField?.value.trim() ?? '';
       if (!databaseUrl) {
         this.showToast('Lobby URL cannot be empty.');
@@ -145,15 +227,17 @@ export class DouShouQiMainMenuScene extends Phaser.Scene {
       this.showToast('Lobby provider saved for this browser.');
       this.updateProviderText();
     });
+    saveProviderButton.setDepth(62);
 
-    this.makeActionButton(430, 442, 'Use Local Lobby Only', async () => {
+    const localOnlyButton = this.makeDetailsButton(438, 354, 'Use Local Lobby Only', async () => {
       saveLocalOnlyLobbyConfig();
       this.showToast('Using local-browser fallback lobby only.');
       this.updateProviderText();
       await this.refreshRooms();
     });
+    localOnlyButton.setDepth(62);
 
-    this.makeActionButton(430, 490, 'Use Bundled Lobby Config', async () => {
+    const bundledButton = this.makeDetailsButton(186, 402, 'Use Bundled Lobby Config', async () => {
       saveLobbyProviderConfig(null);
       this.showToast('Using bundled lobby provider configuration.');
       const nextConfig = resolveLobbyProviderConfig();
@@ -162,83 +246,42 @@ export class DouShouQiMainMenuScene extends Phaser.Scene {
       this.updateProviderText();
       await this.refreshRooms();
     });
+    bundledButton.setDepth(62);
 
-    this.makeActionButton(430, 538, 'Tutorial', async () => {
-      this.scene.start('DouShouQiTutorialScene');
+    const closeDetailsButton = this.makeDetailsButton(438, 402, 'Back to Quick View', async () => {
+      this.setDetailsVisible(false);
     });
+    closeDetailsButton.setDepth(62);
 
-    this.add.text(752, 152, 'Open Rooms', {
-      fontFamily: 'Arial',
-      fontSize: '30px',
-      color: '#ecfdf5'
-    }).setOrigin(0.5);
-
-    this.add.text(752, 182, 'Join uses Player Name + Join Password field on the left.', {
-      fontFamily: 'Arial',
-      fontSize: '14px',
-      color: '#bef264'
-    }).setOrigin(0.5);
-
-    this.roomsContainer = this.add.container(500, 212);
-    this.prevRoomsButton = this.makePageButton(548, 184, 'Prev', -1);
-    this.nextRoomsButton = this.makePageButton(906, 184, 'Next', 1);
-    this.roomPageText = this.add.text(752, 184, 'Page 1/1', {
-      fontFamily: 'Arial',
-      fontSize: '14px',
-      color: '#bbf7d0'
-    }).setOrigin(0.5);
-
-    const reducedMotionButton = this.makeToggleButton(80, 560, () => `Reduced Motion: ${settings.reducedMotion ? 'On' : 'Off'}`, () => {
+    const reducedMotionButton = this.makeToggleButton(186, 470, () => `Reduced Motion: ${settings.reducedMotion ? 'On' : 'Off'}`, () => {
       settings.reducedMotion = !settings.reducedMotion;
       saveUiSettings(settings);
     });
+    reducedMotionButton.setDepth(62);
 
-    const colorAssistButton = this.makeToggleButton(80, 596, () => `Color Assist: ${settings.colorAssist ? 'On' : 'Off'}`, () => {
+    const colorAssistButton = this.makeToggleButton(438, 470, () => `Color Assist: ${settings.colorAssist ? 'On' : 'Off'}`, () => {
       settings.colorAssist = !settings.colorAssist;
       saveUiSettings(settings);
     });
-
-    const musicMuteButton = this.makeToggleButton(330, 560, () => `Music Mute: ${settings.musicMuted ? 'On' : 'Off'}`, () => {
-      settings.musicMuted = !settings.musicMuted;
-      saveUiSettings(settings);
-    });
-
-    const sfxMuteButton = this.makeToggleButton(330, 596, () => `SFX Mute: ${settings.sfxMuted ? 'On' : 'Off'}`, () => {
-      settings.sfxMuted = !settings.sfxMuted;
-      saveUiSettings(settings);
-    });
-
-    const musicVolButton = this.makeToggleButton(580, 560, () => `Music Vol: ${Math.round(settings.musicVolume * 100)}%`, () => {
-      settings.musicVolume = clampVolume(settings.musicVolume >= 1 ? 0 : settings.musicVolume + 0.1);
-      saveUiSettings(settings);
-    });
-
-    const sfxVolButton = this.makeToggleButton(580, 596, () => `SFX Vol: ${Math.round(settings.sfxVolume * 100)}%`, () => {
-      settings.sfxVolume = clampVolume(settings.sfxVolume >= 1 ? 0 : settings.sfxVolume + 0.1);
-      saveUiSettings(settings);
-    });
-
+    colorAssistButton.setDepth(62);
     this.add.existing(reducedMotionButton);
     this.add.existing(colorAssistButton);
-    this.add.existing(musicMuteButton);
-    this.add.existing(sfxMuteButton);
-    this.add.existing(musicVolButton);
-    this.add.existing(sfxVolButton);
 
-    this.providerText = this.add.text(500, 628, '', {
-      fontSize: '14px',
-      color: '#a7f3d0',
-      fontFamily: 'Arial'
-    }).setOrigin(0.5);
-
-    this.toastText = this.add.text(500, 26, '', {
-      fontFamily: 'Arial',
-      fontSize: '16px',
-      color: '#fef9c3',
-      backgroundColor: '#14532d',
-      padding: { x: 8, y: 4 }
-    }).setOrigin(0.5);
-    this.toastText.setVisible(false);
+    this.detailsObjects = [
+      detailsBackdrop,
+      detailsPanel,
+      detailsTitle,
+      detailsHint,
+      this.providerUrlField.container,
+      this.providerTokenField.container,
+      saveProviderButton,
+      localOnlyButton,
+      bundledButton,
+      closeDetailsButton,
+      reducedMotionButton,
+      colorAssistButton
+    ];
+    this.setDetailsVisible(false);
 
     this.input.keyboard?.on('keydown', (event: KeyboardEvent) => {
       this.handleKeyInput(event);
@@ -253,6 +296,19 @@ export class DouShouQiMainMenuScene extends Phaser.Scene {
     this.updateProviderText();
     void this.refreshRooms();
     this.focusInput(this.nameField);
+  }
+
+  private setDetailsVisible(visible: boolean): void {
+    this.detailsVisible = visible;
+    this.detailsObjects.forEach((item) => {
+      item.setVisible(visible);
+    });
+    this.detailsToggleLabel?.setText(visible ? 'Hide Details' : 'Show Details');
+    if (!visible) {
+      this.focusInput(null);
+    } else if (this.providerUrlField) {
+      this.focusInput(this.providerUrlField);
+    }
   }
 
   private createInputField(
@@ -439,9 +495,9 @@ export class DouShouQiMainMenuScene extends Phaser.Scene {
     if (rooms.length === 0) {
       const emptyText = this.add.text(0, 0, 'No open rooms right now. Create one as host.', {
         fontFamily: 'Arial',
-        fontSize: '20px',
+        fontSize: '18px',
         color: '#d1fae5',
-        wordWrap: { width: 430 }
+        wordWrap: { width: 460 }
       });
       this.roomsContainer.add(emptyText);
       this.roomListTexts.push(emptyText);
@@ -449,19 +505,19 @@ export class DouShouQiMainMenuScene extends Phaser.Scene {
     }
 
     rooms.forEach((room, index) => {
-      const y = index * 56;
+      const y = index * 54;
       const roomText = this.add.text(0, y, `${room.locked ? '[LOCK]' : '[OPEN]'} ${room.hostName}  ·  Room ${room.id}`, {
         fontFamily: 'Arial',
-        fontSize: '18px',
+        fontSize: '17px',
         color: '#ecfdf5'
       });
 
-      const joinButton = this.add.text(390, y, 'Join', {
+      const joinButton = this.add.text(430, y - 2, 'Join', {
         fontFamily: 'Arial',
-        fontSize: '19px',
+        fontSize: '17px',
         color: '#052e16',
         backgroundColor: '#86efac',
-        padding: { x: 10, y: 4 }
+        padding: { x: 9, y: 4 }
       });
       joinButton.setInteractive({ useHandCursor: true });
       joinButton.on('pointerdown', () => {
@@ -524,10 +580,25 @@ export class DouShouQiMainMenuScene extends Phaser.Scene {
   private makeActionButton(x: number, y: number, label: string, onClick: () => Promise<void>): Phaser.GameObjects.Text {
     const text = this.add.text(x, y, label, {
       fontFamily: 'Arial',
-      fontSize: '24px',
+      fontSize: '21px',
       color: '#ecfdf5',
       backgroundColor: '#166534',
-      padding: { x: 12, y: 8 }
+      padding: { x: 12, y: 7 }
+    });
+    text.setInteractive({ useHandCursor: true });
+    text.on('pointerdown', () => {
+      void onClick();
+    });
+    return text;
+  }
+
+  private makeDetailsButton(x: number, y: number, label: string, onClick: () => Promise<void>): Phaser.GameObjects.Text {
+    const text = this.add.text(x, y, label, {
+      fontFamily: 'Arial',
+      fontSize: '20px',
+      color: '#ecfdf5',
+      backgroundColor: '#166534',
+      padding: { x: 10, y: 6 }
     });
     text.setInteractive({ useHandCursor: true });
     text.on('pointerdown', () => {

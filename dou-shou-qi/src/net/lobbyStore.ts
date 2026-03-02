@@ -113,6 +113,27 @@ function safeParse<T>(raw: string | null): T | null {
   }
 }
 
+export function normalizeFirebaseDatabaseUrl(databaseUrl: string): string {
+  const trimmed = databaseUrl.trim();
+  if (!trimmed) {
+    return '';
+  }
+
+  const withProtocol = /^[a-zA-Z][a-zA-Z\d+\-.]*:\/\//.test(trimmed) ? trimmed : `https://${trimmed}`;
+  try {
+    const parsed = new URL(withProtocol);
+    parsed.pathname = '/';
+    parsed.search = '';
+    parsed.hash = '';
+    return parsed.toString().replace(/\/$/, '');
+  } catch {
+    return trimmed
+      .replace(/\/rooms(?:\.json)?$/i, '')
+      .replace(/\/[^/]+\.json$/i, '')
+      .replace(/\/+$/, '');
+  }
+}
+
 function readLocalRooms(): Record<string, LobbyRoom> {
   const parsed = safeParse<Record<string, LobbyRoom>>(window.localStorage.getItem(LOCAL_ROOMS_KEY));
   return parsed ?? {};
@@ -340,6 +361,84 @@ class FirebaseLobbyStore implements LobbyStore {
   }
 }
 
+function shouldFallbackToLocal(error: unknown): boolean {
+  const message = String(error ?? '');
+  return (
+    message.includes('Lobby provider request failed') ||
+    message.includes('Failed to fetch') ||
+    message.includes('NetworkError')
+  );
+}
+
+class ResilientLobbyStore implements LobbyStore {
+  private active: LobbyStore;
+  private fallbackUsed = false;
+
+  constructor(private readonly primary: LobbyStore, private readonly fallback: LobbyStore) {
+    this.active = primary;
+  }
+
+  async createRoom(input: CreateRoomInput): Promise<LobbyRoom> {
+    return this.withFallback((store) => store.createRoom(input));
+  }
+
+  async listOpenRooms(now?: number): Promise<LobbyRoomSummary[]> {
+    return this.withFallback((store) => store.listOpenRooms(now));
+  }
+
+  async getRoom(roomId: string): Promise<LobbyRoom | null> {
+    return this.withFallback((store) => store.getRoom(roomId));
+  }
+
+  async joinRoom(roomId: string, input: JoinRoomInput): Promise<LobbyRoom> {
+    return this.withFallback((store) => store.joinRoom(roomId, input));
+  }
+
+  async updateRoom(roomId: string, patch: Partial<LobbyRoom>): Promise<LobbyRoom> {
+    return this.withFallback((store) => store.updateRoom(roomId, patch));
+  }
+
+  watchRoom(roomId: string, onUpdate: (room: LobbyRoom | null) => void): () => void {
+    let stopped = false;
+    let pollTimer: number | null = null;
+
+    const poll = async () => {
+      if (stopped) {
+        return;
+      }
+      try {
+        onUpdate(await this.getRoom(roomId));
+      } catch {
+        onUpdate(null);
+      }
+      pollTimer = window.setTimeout(poll, 1200);
+    };
+
+    void poll();
+    return () => {
+      stopped = true;
+      if (pollTimer !== null) {
+        window.clearTimeout(pollTimer);
+        pollTimer = null;
+      }
+    };
+  }
+
+  private async withFallback<T>(operation: (store: LobbyStore) => Promise<T>): Promise<T> {
+    try {
+      return await operation(this.active);
+    } catch (error) {
+      if (this.fallbackUsed || this.active !== this.primary || !shouldFallbackToLocal(error)) {
+        throw error;
+      }
+      this.fallbackUsed = true;
+      this.active = this.fallback;
+      console.warn('[DouShouQi] Remote lobby unavailable; switching to local-only fallback.');
+      return operation(this.active);
+    }
+  }
+}
+
 function parseStoredConfig(raw: string | null): StoredLobbyProviderConfig | null {
   const parsed = safeParse<StoredLobbyProviderConfig>(raw);
   if (!parsed) {
@@ -349,7 +448,14 @@ function parseStoredConfig(raw: string | null): StoredLobbyProviderConfig | null
     return parsed;
   }
   if (parsed.provider === 'firebase-rtdb' && parsed.databaseUrl) {
-    return parsed;
+    const normalizedUrl = normalizeFirebaseDatabaseUrl(parsed.databaseUrl);
+    if (!normalizedUrl) {
+      return null;
+    }
+    return {
+      ...parsed,
+      databaseUrl: normalizedUrl
+    };
   }
   return null;
 }
@@ -365,9 +471,14 @@ function loadBundledLobbyConfig(): LobbyProviderConfig | null {
     return null;
   }
 
+  const normalizedUrl = normalizeFirebaseDatabaseUrl(parsed.databaseUrl);
+  if (!normalizedUrl) {
+    return null;
+  }
+
   return {
     provider: 'firebase-rtdb',
-    databaseUrl: parsed.databaseUrl,
+    databaseUrl: normalizedUrl,
     authToken: parsed.authToken,
     pollIntervalMs: parsed.pollIntervalMs
   };
@@ -399,7 +510,11 @@ export function saveLobbyProviderConfig(config: LobbyProviderConfig | null): voi
     window.localStorage.removeItem(CONFIG_KEY);
     return;
   }
-  window.localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
+  const normalizedUrl = normalizeFirebaseDatabaseUrl(config.databaseUrl);
+  window.localStorage.setItem(CONFIG_KEY, JSON.stringify({
+    ...config,
+    databaseUrl: normalizedUrl
+  }));
 }
 
 export function saveLocalOnlyLobbyConfig(): void {
@@ -409,7 +524,10 @@ export function saveLocalOnlyLobbyConfig(): void {
 export function createLobbyStore(): LobbyStore {
   const config = loadLobbyProviderConfig();
   if (config?.provider === 'firebase-rtdb') {
-    return new FirebaseLobbyStore(config.databaseUrl, config.authToken, config.pollIntervalMs);
+    return new ResilientLobbyStore(
+      new FirebaseLobbyStore(config.databaseUrl, config.authToken, config.pollIntervalMs),
+      new LocalStorageLobbyStore()
+    );
   }
   return new LocalStorageLobbyStore();
 }

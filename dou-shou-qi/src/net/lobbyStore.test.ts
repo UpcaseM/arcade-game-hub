@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { LobbyRoom, isOpenRoom, lobbyTtlMs } from './lobbyStore';
+import { LobbyRoom, isOpenRoom, lobbyTtlMs, normalizeFirebaseDatabaseUrl } from './lobbyStore';
 
 function room(partial: Partial<LobbyRoom>): LobbyRoom {
   return {
@@ -30,5 +30,19 @@ describe('lobby room filters', () => {
   it('drops occupied rooms from open listing', () => {
     const occupied = room({ guestName: 'Guest' });
     expect(isOpenRoom(occupied, 110)).toBe(false);
+  });
+});
+
+describe('normalizeFirebaseDatabaseUrl', () => {
+  it('strips room path and json suffix', () => {
+    expect(normalizeFirebaseDatabaseUrl('https://demo-default-rtdb.firebaseio.com/rooms.json')).toBe(
+      'https://demo-default-rtdb.firebaseio.com'
+    );
+  });
+
+  it('adds https when protocol is missing', () => {
+    expect(normalizeFirebaseDatabaseUrl('demo-default-rtdb.firebaseio.com/rooms')).toBe(
+      'https://demo-default-rtdb.firebaseio.com'
+    );
   });
 });

@@ -75,13 +75,14 @@ const store = {
   updateRoom: vi.fn(async (_roomId: string, patch: Partial<LobbyRoom>) => ({ ...mockRoom, ...patch })),
   watchRoom: vi.fn(() => () => {})
 };
+const createLobbyStoreMock = vi.fn(() => store);
 
 vi.mock('./webrtcTransport', () => ({
   WebRtcManualTransport: MockTransport
 }));
 
 vi.mock('./lobbyStore', () => ({
-  createLobbyStore: () => store
+  createLobbyStore: createLobbyStoreMock
 }));
 
 describe('onlineSession lobby lifecycle', () => {
@@ -93,6 +94,7 @@ describe('onlineSession lobby lifecycle', () => {
     store.joinRoom.mockClear();
     store.updateRoom.mockClear();
     store.watchRoom.mockClear();
+    createLobbyStoreMock.mockClear();
     vi.resetModules();
   });
 
@@ -145,5 +147,14 @@ describe('onlineSession lobby lifecycle', () => {
     });
     const afterStart = onlineSession.requestAction({ type: 'flip', pieceId: 'p1' });
     expect(afterStart).toBe(true);
+  });
+
+  it('reloads lobby provider store before list and host actions', async () => {
+    const { onlineSession } = await import('./onlineSession');
+
+    await onlineSession.listOpenRooms();
+    await onlineSession.hostRoom('Alice');
+
+    expect(createLobbyStoreMock.mock.calls.length).toBeGreaterThanOrEqual(3);
   });
 });

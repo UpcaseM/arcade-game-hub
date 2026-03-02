@@ -43,7 +43,7 @@ class OnlineSession {
   private localName = 'Guest';
   private remoteName = 'Opponent';
   private status: SessionStatus = 'offline';
-  private readonly lobbyStore = createLobbyStore();
+  private lobbyStore = createLobbyStore();
   private currentRoom: LobbyRoom | null = null;
   private roomWatchStop: (() => void) | null = null;
   private heartbeatTimer: number | null = null;
@@ -86,12 +86,19 @@ class OnlineSession {
     return this.role === 'host' ? 'player2' : 'player1';
   }
 
+  reloadLobbyStore(): void {
+    // Always re-resolve provider config from current browser storage/global config.
+    this.lobbyStore = createLobbyStore();
+  }
+
   async listOpenRooms(): Promise<LobbyRoomSummary[]> {
+    this.reloadLobbyStore();
     return this.lobbyStore.listOpenRooms();
   }
 
   async hostRoom(localName: string, password?: string): Promise<LobbyRoom> {
     this.reset();
+    this.reloadLobbyStore();
     this.localName = localName;
     this.remoteName = 'Waiting for guest';
     this.role = 'host';
@@ -125,6 +132,7 @@ class OnlineSession {
 
   async joinRoom(localName: string, roomId: string, password?: string): Promise<LobbyRoom> {
     this.reset();
+    this.reloadLobbyStore();
     const room = await this.lobbyStore.getRoom(roomId);
     if (!room) {
       throw new Error('Room not found.');
