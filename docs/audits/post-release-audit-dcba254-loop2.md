@@ -1,17 +1,18 @@
-# Post-Release Audit Report (Loop 3)
+# Post-Release Audit Report (Loop 4)
 
 - Commit under audit: `dcba254`
 - Report date: 2026-03-02
 - Scope: UI simplification, lobby provider fallback behavior, responsive hub/embed behavior, and release gates.
 
-## Loop 3 Summary
+## Loop 4 Summary
 
-This loop resolved the two code/repo blockers from prior review:
+This loop closed the remaining code-side blocker and tightened fallback coverage:
 
-1. Removed stray root files accidentally added to version control (`Dou`, `back`).
-2. Reverted out-of-scope same-rank trade-elimination gameplay changes so rules are consistent with release scope.
+1. Removed stray tracked root files (`Dou`, `back`) so they no longer ship.
+2. Added missing `401` auth-error test coverage to ensure fallback is not triggered on permission/auth failures.
+3. Re-ran required automated gates; all pass.
 
-Runtime browser evidence tasks (UI smoke, fallback simulations, responsive matrix) remain blocked in this sandbox because opening a local HTTP server is not permitted.
+Runtime browser evidence tasks (UI smoke, fallback simulations, responsive matrix) remain blocked in this sandbox due runtime restrictions on local serving and browser execution.
 
 ## Implemented Changes
 
@@ -22,18 +23,16 @@ Runtime browser evidence tasks (UI smoke, fallback simulations, responsive matri
   - `back`
 - Verification:
   - `git ls-files Dou back` returns no entries.
-  - Files are absent on disk.
+  - `test ! -e Dou && test ! -e back` passes.
 
-### 2) Scope regression rollback (game rules)
+### 2) Fallback test hardening
 
-- Restored capture behavior to release rule semantics:
-  - same-rank capture no longer removes both pieces.
-  - attacker survives on valid equal-rank capture.
-- Updated affected files:
-  - `dou-shou-qi/src/data/gameData.ts`
-  - `dou-shou-qi/src/data/gameData.test.ts`
-  - `dou-shou-qi/src/game/scenes/TutorialScene.ts`
-- `dou-shou-qi/README.md` already matched expected rule text and required no change.
+- Updated `dou-shou-qi/src/net/lobbyStore.test.ts` with:
+  - `does not fallback on auth errors (401)`
+- Assertions verify:
+  - operations reject with `Lobby provider request failed (401)`
+  - no automatic fallback warning
+  - no fallback event dispatch
 
 ## Validation Results
 
@@ -41,34 +40,45 @@ Runtime browser evidence tasks (UI smoke, fallback simulations, responsive matri
 
 - `node --test tools/auth.test.mjs` -> **pass**
 - `node tools/validate-static-paths.mjs` -> **pass**
-- `npm --prefix dou-shou-qi run lint` -> **pass**
-- `npm --prefix dou-shou-qi test` -> **pass** (38/38)
+- `npm --prefix dou-shou-qi test` -> **pass** (`39/39`)
 - `npm --prefix dou-shou-qi run build` -> **pass**
 
-### Runtime execution feasibility check
+### Runtime execution feasibility checks
 
-- Attempted local static server:
-  - `python3 -m http.server 8000`
-- Result: **blocked** with `PermissionError: [Errno 1] Operation not permitted`.
-- Consequence: in-browser UI/fallback/responsive matrices cannot be executed in this environment.
+- Local static server attempt:
+  - Command: `python3 -m http.server 8000`
+  - Result: **blocked** with `PermissionError: [Errno 1] Operation not permitted` (socket bind denied).
+- Browser execution attempt:
+  - Command: `chromium-browser --headless ...`
+  - Result: **blocked** (`snap-confine` capability denial; cannot create usable sandbox profile in this environment).
 
 ## Work Package Snapshot
 
 | WP | Status | Notes |
 |---|---|---|
-| WP1 Scope + delta mapping | Pass | Unchanged from previous loop. |
-| WP2 Static code audit (UI/provider) | Pass | Prior fallback logic/test hardening intact; scope regression removed. |
+| WP1 Scope + delta mapping | Pass | Unchanged from prior loops. |
+| WP2 Static code audit (UI/provider) | Pass | Fallback policy/test hardening preserved; added 401 no-fallback coverage. |
 | WP3 Automated gates | Pass | Required automated commands pass. |
 | WP4 Runtime UI simplification validation | Fail (env-blocked) | Needs permissive browser runtime. |
 | WP5 Runtime fallback + responsive validation | Fail (env-blocked) | Needs permissive browser runtime and evidence capture. |
-| WP6 Defect triage/minimal fixes/sign-off | Partial | Code blockers fixed; runtime evidence still outstanding. |
+| WP6 Defect triage/minimal fixes/sign-off | Partial | Blocking repo hygiene fixed; runtime evidence still outstanding. |
+
+## Acceptance Criteria Status (Loop 4)
+
+| AC | Status | Evidence |
+|---|---|---|
+| AC1 UI simplification flows | Partial | Static code review complete; runtime UI smoke not executable here. |
+| AC2 Details overlay behavior | Partial | Static code review complete; runtime interaction evidence pending. |
+| AC7 Responsive hub/embed matrix | Fail (env-blocked) | Requires real browser viewport/rotation runs. |
+| AC9 Automated gates | Pass | All required commands pass in this loop. |
+| AC11 Asset policy | Pass | No new assets introduced. |
 
 ## Remaining Required Follow-Ups (Outside Sandbox)
 
-1. Execute Dou Shou Qi UI smoke matrix (quick view/details, host/join, refresh/paging, tutorial navigation) and capture screenshots + pass/fail notes.
-2. Execute provider failure simulations (invalid URL, offline, blocked/CORS-like, auth-denied 401/403) with console/network notes.
-3. Execute responsive hub->Dou Shou Qi embed matrix at ~390 portrait/landscape, ~560, ~860, desktop; repeat hub->game->back loop x3.
-4. Attach evidence paths/links and finalize AC1/AC2/AC7/AC9/AC11 as Pass/Fail.
+1. Run browser UI smoke for Dou Shou Qi quick view/details, host/join, refresh/paging, tutorial flow; capture dated screenshots.
+2. Run provider failure runtime matrix: invalid URL, offline, blocked/CORS-like, auth-denied (401/403); capture console/network evidence and provider text/toast outcomes.
+3. Run responsive matrix at ~390 portrait+landscape, ~560, ~860, desktop; repeat hub -> Dou Shou Qi -> back loop x3.
+4. Attach evidence links/paths and finalize AC1/AC2/AC7 as Pass/Fail.
 
 ## Asset Policy
 

@@ -133,6 +133,32 @@ describe('resilient lobby fallback', () => {
     warnSpy.mockRestore();
   });
 
+  it('does not fallback on auth errors (401)', async () => {
+    saveLobbyProviderConfig({
+      provider: 'firebase-rtdb',
+      databaseUrl: 'https://demo-default-rtdb.firebaseio.com'
+    });
+
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 401,
+      json: async () => ({ error: 'Unauthorized' })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const store = createLobbyStore();
+    await expect(store.listOpenRooms()).rejects.toThrow('Lobby provider request failed (401)');
+    await expect(store.createRoom({ hostName: 'Host', offerCode: 'offer', locked: false })).rejects.toThrow(
+      'Lobby provider request failed (401)'
+    );
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(warnSpy).not.toHaveBeenCalled();
+    expect(window.dispatchEvent).not.toHaveBeenCalled();
+    warnSpy.mockRestore();
+  });
+
   it('falls back on HTTP 503 provider errors', async () => {
     saveLobbyProviderConfig({
       provider: 'firebase-rtdb',

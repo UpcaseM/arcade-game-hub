@@ -96,3 +96,17 @@ Updated `dou-shou-qi/src/net/lobbyStore.test.ts` to cover:
 
 - No new assets were added in this loop.
 - Policy remains: only free/open licensed assets with in-repo attribution/license text for any future additions.
+
+## Loop 4 Carry-Forward Update (2026-03-02)
+
+- Repo hygiene blocker is now resolved: tracked root files `Dou` and `back` were removed.
+- Added fallback regression coverage for HTTP `401` in `dou-shou-qi/src/net/lobbyStore.test.ts` to enforce no auto-fallback on auth failures.
+- Required automated gates pass in loop 4:
+  - `node --test tools/auth.test.mjs`
+  - `node tools/validate-static-paths.mjs`
+  - `npm --prefix dou-shou-qi test`
+  - `npm --prefix dou-shou-qi run build`
+- Runtime browser matrices remain environment-blocked in this sandbox due:
+  - socket bind restrictions (`python3 -m http.server` -> `PermissionError: [Errno 1] Operation not permitted`)
+  - restricted Chromium snap runtime (`snap-confine` capability denial)
+- Latest status and evidence are tracked in `docs/audits/post-release-audit-dcba254-loop2.md` (Loop 4 report).
