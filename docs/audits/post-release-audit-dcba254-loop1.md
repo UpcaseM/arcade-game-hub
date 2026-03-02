@@ -1,9 +1,16 @@
-# Post-Release Audit Report (Loop 3 Update)
+# Post-Release Audit Report (Loop 4 Update)
 
 - Commit: `dcba254`
 - Date: 2026-03-02
 - Scope: UI simplification, lobby provider fallback, responsive hub/embed behavior, and test coverage.
-- Inputs: `plan.json` (ship-20260302T041326Z-e62cec86), `review_report.loop-2.json`, source/tests/build artifacts.
+- Inputs: `plan.json` (ship-20260302T041326Z-e62cec86), `review_report.loop-3.json`, source/tests/build artifacts.
+
+## Loop 4 Delta
+
+- Added direct unit coverage for resilient fallback behavior in `dou-shou-qi/src/net/lobbyStore.test.ts`:
+  - Fallback activates on network-like errors and remains on local store afterward (one-way switch).
+  - Non-network errors do not trigger fallback.
+- Runtime-browser evidence requirements from loop-3 remain blocked by sandbox constraints (no local server sockets and no installable browser automation runtime).
 
 ## Work Package Status
 
@@ -14,7 +21,7 @@
 | WP3 | OnlineSession Lifecycle | Pass | `onlineSession` unit suite passes; provider reload behavior remains covered by existing tests. |
 | WP4 | UI Simplification | **Fail (runtime validation blocked in this environment)** | Required interactive host/join/refresh/details/tutorial/paging smoke flow could not run without browser runtime access. |
 | WP5 | Responsive + Embed Verification | **Fail (runtime validation blocked in this environment)** | Required desktop/mobile viewport + rotation checks (~390/~560/~860 + desktop) could not run; local HTTP server and browser automation both blocked by sandbox permissions. |
-| WP6 | Coverage + Workflow Gates | Pass (with noted gaps) | Automated gates re-run and passing; runtime-only evidence remains unavailable in this loop due execution constraints. |
+| WP6 | Coverage + Workflow Gates | Pass (with noted gaps) | Automated gates pass; loop-4 adds direct resilient-fallback unit coverage, but runtime-only evidence remains unavailable in this loop due execution constraints. |
 
 ## Acceptance Criteria Matrix
 
@@ -52,17 +59,9 @@
 
 Because of these constraints, required runtime checks from review loop 1 could not be completed in this execution environment.
 
-## Commands Run and Results (Loop 3)
+## Commands Run and Results (Loop 4)
 
-- `cd dou-shou-qi && npm test -- --run src/net/lobbyStore.test.ts` -> pass (5/5)
-- `cd dou-shou-qi && npm test -- --run src/net/onlineSession.test.ts` -> pass (5/5)
-- `node --test tools/auth.test.mjs` -> pass
-- `node tools/validate-static-paths.mjs` -> pass (`Static path validation passed.`)
-- `cd dou-shou-qi && npm run build` -> pass (vite build successful; non-blocking chunk-size warning)
-- `python3 -m http.server 8000` -> fail (sandbox socket permission denied)
-- `google-chrome --headless --disable-gpu --no-sandbox --screenshot=... file:///.../index.html` -> fail (`setsockopt: Operation not permitted`; process trapped)
-- `chromium-browser --headless ... --remote-debugging-port=9222` -> fail (snap capability permission denied)
-- `npx playwright install` -> fail (network/DNS restricted to npm registry)
+- `cd dou-shou-qi && npm test -- --run src/net/lobbyStore.test.ts` -> pass (7/7, includes new resilient fallback tests)
 
 ## Required Runtime Matrix Status
 

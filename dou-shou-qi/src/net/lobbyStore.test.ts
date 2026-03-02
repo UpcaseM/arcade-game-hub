@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { LobbyRoom, isOpenRoom, lobbyTtlMs, normalizeFirebaseDatabaseUrl } from './lobbyStore';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { LobbyRoom, createLobbyStore, isOpenRoom, lobbyTtlMs, normalizeFirebaseDatabaseUrl, saveLobbyProviderConfig } from './lobbyStore';
 
 function room(partial: Partial<LobbyRoom>): LobbyRoom {
   return {
@@ -44,5 +44,75 @@ describe('normalizeFirebaseDatabaseUrl', () => {
     expect(normalizeFirebaseDatabaseUrl('demo-default-rtdb.firebaseio.com/rooms')).toBe(
       'https://demo-default-rtdb.firebaseio.com'
     );
+  });
+});
+
+describe('resilient lobby fallback', () => {
+  beforeEach(() => {
+    const state = new Map<string, string>();
+    const localStorageMock = {
+      getItem: (key: string) => state.get(key) ?? null,
+      setItem: (key: string, value: string) => {
+        state.set(key, value);
+      },
+      removeItem: (key: string) => {
+        state.delete(key);
+      },
+      clear: () => {
+        state.clear();
+      }
+    };
+    vi.stubGlobal('window', {
+      localStorage: localStorageMock,
+      setTimeout: globalThis.setTimeout.bind(globalThis),
+      clearTimeout: globalThis.clearTimeout.bind(globalThis),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn()
+    });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('falls back to local store on network-like fetch errors and stays on fallback', async () => {
+    saveLobbyProviderConfig({
+      provider: 'firebase-rtdb',
+      databaseUrl: 'https://demo-default-rtdb.firebaseio.com'
+    });
+
+    const fetchMock = vi.fn().mockRejectedValue(new Error('Failed to fetch'));
+    vi.stubGlobal('fetch', fetchMock);
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const store = createLobbyStore();
+    await expect(store.listOpenRooms()).resolves.toEqual([]);
+    await expect(store.createRoom({ hostName: 'Host', offerCode: 'offer', locked: false })).resolves.toMatchObject({
+      hostName: 'Host',
+      status: 'open'
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(warnSpy).toHaveBeenCalledWith('[DouShouQi] Remote lobby unavailable; switching to local-only fallback.');
+    warnSpy.mockRestore();
+  });
+
+  it('does not fallback on non-network errors', async () => {
+    saveLobbyProviderConfig({
+      provider: 'firebase-rtdb',
+      databaseUrl: 'https://demo-default-rtdb.firebaseio.com'
+    });
+
+    const fetchMock = vi.fn().mockRejectedValue(new Error('forbidden'));
+    vi.stubGlobal('fetch', fetchMock);
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const store = createLobbyStore();
+    await expect(store.listOpenRooms()).rejects.toThrow('forbidden');
+    await expect(store.listOpenRooms()).rejects.toThrow('forbidden');
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(warnSpy).not.toHaveBeenCalled();
+    warnSpy.mockRestore();
   });
 });
