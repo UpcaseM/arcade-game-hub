@@ -1,4 +1,4 @@
 window.__DOU_SHOU_QI_LOBBY_CONFIG__ = {
   provider: 'firebase-rtdb',
-  databaseUrl: 'https://arcade-game-hub-lobby-default-rtdb.firebaseio.com'
+  databaseUrl: 'https://enzo-game-hub-default-rtdb.firebaseio.com'
 };
