@@ -408,6 +408,10 @@ button:disabled {
   z-index: 20;
 }
 
+.modal.hidden {
+  display: none;
+}
+
 .modal-panel {
   width: min(460px, 100%);
   border-radius: 0.9rem;
