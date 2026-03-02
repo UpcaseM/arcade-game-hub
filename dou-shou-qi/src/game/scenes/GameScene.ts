@@ -101,6 +101,19 @@ export class DouShouQiGameScene extends Phaser.Scene {
 
   private createBoard(): void {
     this.boardGraphics = this.add.graphics();
+    this.cameras.main.setBackgroundColor(0x111827);
+
+    const sceneWidth = this.scale.width;
+    const sceneHeight = this.scale.height;
+    this.boardGraphics.fillGradientStyle(0x102214, 0x1f3520, 0x2c2a18, 0x17261b, 1);
+    this.boardGraphics.fillRect(0, 0, sceneWidth, sceneHeight);
+
+    this.boardGraphics.fillStyle(0x1f3a25, 0.2);
+    for (let i = 0; i < 20; i += 1) {
+      const rx = 20 + i * 48;
+      const ry = (i % 2 === 0 ? 24 : 56) + (i * 17) % 510;
+      this.boardGraphics.fillCircle(rx, ry, i % 3 === 0 ? 14 : 9);
+    }
 
     const width = BOARD_COLS * CELL_SIZE;
     const height = BOARD_ROWS * CELL_SIZE;
@@ -172,9 +185,9 @@ export class DouShouQiGameScene extends Phaser.Scene {
       });
     }
 
-    const settingsButton = this.add.text(976, 24, 'Settings', {
+    const settingsButton = this.add.text(976, 82, 'Settings', {
       fontFamily: 'Arial',
-      fontSize: '20px',
+      fontSize: '18px',
       color: '#f8fafc',
       backgroundColor: '#0f172a',
       padding: { x: 10, y: 6 }
@@ -620,7 +633,7 @@ export class DouShouQiGameScene extends Phaser.Scene {
   }
 
   private createSettingsPanel(): void {
-    const x = 760;
+    const x = this.scale.width - 430 - 24;
     const y = 92;
     const width = 430;
     const height = 250;

@@ -7,6 +7,8 @@ const PLAYER_LABEL: Record<PlayerTurn, string> = {
   player1: 'Player 1',
   player2: 'Player 2'
 };
+const HUD_PANEL_WIDTH = 248;
+const HUD_PANEL_HEIGHT = 50;
 
 interface HudMeta {
   compact: boolean;
@@ -52,7 +54,7 @@ export class HudView {
   constructor(scene: Phaser.Scene) {
     this.panels = {
       player1: this.createPanel(scene, 26, 18, 'player1'),
-      player2: this.createPanel(scene, 662, 18, 'player2')
+      player2: this.createPanel(scene, 726, 18, 'player2')
     };
 
     this.infoText = scene.add.text(26, 98, '', {
@@ -141,34 +143,36 @@ export class HudView {
   }
 
   private createPanel(scene: Phaser.Scene, x: number, y: number, turn: PlayerTurn): PlayerPanel {
-    const bg = scene.add.rectangle(x + 156, y + 28, 312, 50, NEUTRAL_COLORS.panelBg, 0.94);
+    const panelWidth = HUD_PANEL_WIDTH;
+    const panelHeight = HUD_PANEL_HEIGHT;
+    const bg = scene.add.rectangle(x, y, panelWidth, panelHeight, NEUTRAL_COLORS.panelBg, 0.94);
     bg.setOrigin(0);
     bg.setDepth(6);
 
-    const border = scene.add.rectangle(x + 156, y + 28, 312, 50);
+    const border = scene.add.rectangle(x, y, panelWidth, panelHeight);
     border.setOrigin(0);
     border.setStrokeStyle(2, NEUTRAL_COLORS.panelBorder, 0.7);
     border.setDepth(7);
 
-    const title = scene.add.text(x + 12, y + 8, PLAYER_LABEL[turn], {
+    const title = scene.add.text(x + 12, y + 7, PLAYER_LABEL[turn], {
       fontFamily: 'Arial',
-      fontSize: '16px',
+      fontSize: '15px',
       color: NEUTRAL_COLORS.textPrimary
     });
     title.setDepth(8);
 
-    const side = scene.add.text(x + 12, y + 28, '', {
+    const side = scene.add.text(x + 12, y + 27, '', {
       fontFamily: 'Arial',
-      fontSize: '12px',
+      fontSize: '11px',
       color: NEUTRAL_COLORS.textSecondary
     });
     side.setDepth(8);
 
     const badge = scene.add.graphics();
-    badge.setPosition(x + 296, y + 18);
+    badge.setPosition(x + panelWidth - 20, y + 14);
     badge.setDepth(8);
 
-    const turnCaret = scene.add.text(x + 286, y + 28, '>', {
+    const turnCaret = scene.add.text(x + panelWidth - 30, y + 26, '>', {
       fontFamily: 'Arial',
       fontSize: '18px',
       color: '#facc15'

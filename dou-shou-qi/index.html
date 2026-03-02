@@ -18,18 +18,19 @@
           radial-gradient(circle at 88% 92%, rgba(125, 79, 47, 0.34), transparent 34%),
           linear-gradient(140deg, #1b2d1b, #263d24);
         color: #ecfdf5;
-        min-height: 100vh;
+        width: 100vw;
+        height: 100dvh;
         display: flex;
-        flex-direction: column;
         align-items: center;
         justify-content: center;
-        padding: 0.6rem;
+        padding: 0;
+        overflow: hidden;
+        overscroll-behavior: none;
+        touch-action: manipulation;
       }
       #game-container {
-        width: min(100%, 1000px);
-        border: 2px solid #5f7f50;
-        border-radius: 12px;
-        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        width: 100%;
+        height: 100%;
         overflow: hidden;
       }
     </style>

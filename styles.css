@@ -31,6 +31,12 @@ body {
   padding: clamp(0.9rem, 2vw, 1.6rem);
 }
 
+body.game-lock-scroll {
+  height: 100dvh;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
 .hub-app {
   width: min(1100px, 100%);
   margin: 0 auto;
@@ -385,7 +391,7 @@ button:disabled {
 #douShouQiFrame {
   display: block;
   width: 100%;
-  height: min(650px, 72vh);
+  height: min(720px, calc(100dvh - 210px));
   border: 0;
   background: #182718;
 }
@@ -546,7 +552,25 @@ button:disabled {
     min-width: 0;
   }
 
+  #douShouQiScreen.screen-active {
+    min-height: calc(100dvh - 1rem);
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+    overflow: hidden;
+  }
+
+  #douShouQiScreen .screen-header {
+    flex: 0 0 auto;
+  }
+
+  .dou-iframe-shell {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+
   #douShouQiFrame {
-    height: min(650px, 68vh);
+    height: 100%;
+    min-height: 0;
   }
 }

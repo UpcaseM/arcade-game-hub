@@ -224,6 +224,7 @@ function showScreen(name) {
 
   nextScreen.classList.add('screen-active');
   currentScreen = name;
+  document.body.classList.toggle('game-lock-scroll', name === 'douShouQi');
 
   if (name === 'douShouQi') {
     loadDouShouQiGame();
