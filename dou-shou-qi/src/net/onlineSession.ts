@@ -89,6 +89,20 @@ class OnlineSession {
     return transport.createOffer();
   }
 
+  async reconnectHost(): Promise<string> {
+    if (this.role !== 'host') {
+      throw new Error('Reconnect host is only available for host role.');
+    }
+    this.transport?.destroy();
+    this.transport = null;
+    this.remoteName = 'Opponent';
+    this.applyStatus('signaling');
+    const transport = new WebRtcManualTransport('host');
+    this.transport = transport;
+    this.bindTransport(transport);
+    return transport.createOffer();
+  }
+
   async hostAcceptAnswer(answerCode: string): Promise<void> {
     if (!this.transport || this.transport.getRole() !== 'host') {
       throw new Error('Host session is not initialized.');
@@ -101,6 +115,20 @@ class OnlineSession {
     this.localName = localName;
     this.remoteName = 'Host';
     this.role = 'guest';
+    this.applyStatus('signaling');
+    const transport = new WebRtcManualTransport('guest');
+    this.transport = transport;
+    this.bindTransport(transport);
+    return transport.acceptOfferAndCreateAnswer(offerCode);
+  }
+
+  async reconnectGuest(offerCode: string): Promise<string> {
+    if (this.role !== 'guest') {
+      throw new Error('Reconnect join is only available for guest role.');
+    }
+    this.transport?.destroy();
+    this.transport = null;
+    this.remoteName = 'Host';
     this.applyStatus('signaling');
     const transport = new WebRtcManualTransport('guest');
     this.transport = transport;
@@ -136,4 +164,3 @@ class OnlineSession {
 }
 
 export const onlineSession = new OnlineSession();
-

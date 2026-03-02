@@ -25,7 +25,7 @@ import { playFlipReveal } from '../ui/fx/FlipFx';
 import { playMoveTween, showMoveTrail } from '../ui/fx/MoveFx';
 import { startSelectionPulse } from '../ui/fx/SelectionFx';
 import { showTurnTransition } from '../ui/fx/TurnTransitionFx';
-import { UiSettings, loadUiSettings } from '../ui/settings';
+import { UiSettings, loadUiSettings, saveUiSettings } from '../ui/settings';
 import { NEUTRAL_COLORS, getPlayerIdentity } from '../ui/theme';
 
 const PLAYER_LABEL: Record<PlayerTurn, string> = {
@@ -34,6 +34,10 @@ const PLAYER_LABEL: Record<PlayerTurn, string> = {
 };
 
 type SceneMode = 'local' | 'online';
+
+function clampVolume(value: number): number {
+  return Math.max(0, Math.min(1, Number(value.toFixed(2))));
+}
 
 export class DouShouQiGameScene extends Phaser.Scene {
   private gameState!: GameState;
@@ -55,6 +59,12 @@ export class DouShouQiGameScene extends Phaser.Scene {
   private mode: SceneMode = 'local';
   private localTurn: PlayerTurn = 'player1';
   private awaitingSnapshot = false;
+  private settingsPanel!: Phaser.GameObjects.Container;
+  private settingsPanelVisible = false;
+  private settingsMusicMuteText!: Phaser.GameObjects.Text;
+  private settingsSfxMuteText!: Phaser.GameObjects.Text;
+  private settingsMusicVolumeText!: Phaser.GameObjects.Text;
+  private settingsSfxVolumeText!: Phaser.GameObjects.Text;
 
   constructor() {
     super('DouShouQiGameScene');
@@ -142,13 +152,42 @@ export class DouShouQiGameScene extends Phaser.Scene {
       fontSize: '14px',
       color: '#94a3b8'
     });
+
+    if (this.mode === 'online') {
+      const reconnectButton = this.add.text(210, 620, 'Reconnect', {
+        fontFamily: 'Arial',
+        fontSize: '20px',
+        color: '#22d3ee'
+      });
+      reconnectButton.setInteractive({ useHandCursor: true });
+      reconnectButton.on('pointerdown', () => {
+        void this.handleReconnect();
+      });
+    }
+
+    const settingsButton = this.add.text(976, 24, 'Settings', {
+      fontFamily: 'Arial',
+      fontSize: '20px',
+      color: '#f8fafc',
+      backgroundColor: '#0f172a',
+      padding: { x: 10, y: 6 }
+    });
+    settingsButton.setOrigin(1, 0);
+    settingsButton.setDepth(31);
+    settingsButton.setInteractive({ useHandCursor: true });
+    settingsButton.on('pointerdown', () => {
+      this.audio.unlock();
+      this.toggleSettingsPanel();
+    });
+
+    this.createSettingsPanel();
   }
 
   private setupInput(): void {
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
       this.audio.unlock();
 
-      if (this.actionLocked || this.gameState.status !== 'playing' || this.awaitingSnapshot) {
+      if (this.actionLocked || this.gameState.status !== 'playing' || this.awaitingSnapshot || this.settingsPanelVisible) {
         return;
       }
 
@@ -169,8 +208,17 @@ export class DouShouQiGameScene extends Phaser.Scene {
     }
 
     onlineSession.setListener({
-      onStatus: () => {
+      onStatus: (status) => {
         this.updateNetworkText();
+        if (status === 'connected') {
+          if (onlineSession.getRole() === 'guest') {
+            this.awaitingSnapshot = true;
+            this.gameState.lastAction = 'Connected. Waiting for host snapshot...';
+            this.renderHud();
+          } else {
+            this.broadcastSnapshot();
+          }
+        }
       },
       onMessage: (message) => {
         if (message.type === 'actionRequest' && onlineSession.getRole() === 'host') {
@@ -198,6 +246,10 @@ export class DouShouQiGameScene extends Phaser.Scene {
           this.syncPieceViewsToState();
           this.renderHud();
           this.updateNetworkText(message.payload.hostName, message.payload.guestName);
+        }
+
+        if (message.type === 'hello') {
+          this.updateNetworkText();
         }
       }
     });
@@ -236,7 +288,7 @@ export class DouShouQiGameScene extends Phaser.Scene {
   private async handleCellTap(col: number, row: number): Promise<void> {
     if (this.mode === 'online') {
       if (onlineSession.getStatus() !== 'connected') {
-        this.gameState.lastAction = 'Connection not ready. Use Reconnect from menu.';
+        this.gameState.lastAction = 'Connection not ready. Use Reconnect.';
         this.renderHud();
         return;
       }
@@ -536,5 +588,153 @@ export class DouShouQiGameScene extends Phaser.Scene {
       y: BOARD_OFFSET_Y + row * CELL_SIZE + CELL_SIZE / 2
     };
   }
-}
 
+  private createSettingsPanel(): void {
+    const x = 760;
+    const y = 92;
+    const width = 430;
+    const height = 250;
+    const panel = this.add.container(x, y);
+    panel.setDepth(40);
+    panel.setVisible(false);
+
+    const backdrop = this.add.rectangle(width / 2, height / 2, width, height, 0x020617, 0.95);
+    backdrop.setStrokeStyle(2, 0x334155, 1);
+    panel.add(backdrop);
+
+    const title = this.add.text(20, 18, 'In-Match Settings', {
+      fontFamily: 'Arial',
+      fontSize: '22px',
+      color: '#f8fafc'
+    });
+    panel.add(title);
+
+    const closeButton = this.add.text(width - 20, 18, 'Close', {
+      fontFamily: 'Arial',
+      fontSize: '18px',
+      color: '#60a5fa'
+    });
+    closeButton.setOrigin(1, 0);
+    closeButton.setInteractive({ useHandCursor: true });
+    closeButton.on('pointerdown', () => {
+      this.toggleSettingsPanel(false);
+    });
+    panel.add(closeButton);
+
+    this.settingsMusicMuteText = this.createSettingsActionText(20, 70, '', () => {
+      this.settings.musicMuted = !this.settings.musicMuted;
+      this.persistSettings();
+    });
+    panel.add(this.settingsMusicMuteText);
+
+    this.settingsSfxMuteText = this.createSettingsActionText(20, 110, '', () => {
+      this.settings.sfxMuted = !this.settings.sfxMuted;
+      this.persistSettings();
+    });
+    panel.add(this.settingsSfxMuteText);
+
+    this.settingsMusicVolumeText = this.createSettingsActionText(20, 150, '', () => {
+      this.settings.musicVolume = clampVolume(this.settings.musicVolume >= 1 ? 0 : this.settings.musicVolume + 0.1);
+      this.persistSettings();
+    });
+    panel.add(this.settingsMusicVolumeText);
+
+    this.settingsSfxVolumeText = this.createSettingsActionText(20, 190, '', () => {
+      this.settings.sfxVolume = clampVolume(this.settings.sfxVolume >= 1 ? 0 : this.settings.sfxVolume + 0.1);
+      this.persistSettings();
+    });
+    panel.add(this.settingsSfxVolumeText);
+
+    this.settingsPanel = panel;
+    this.refreshSettingsPanelLabels();
+  }
+
+  private createSettingsActionText(
+    x: number,
+    y: number,
+    label: string,
+    onClick: () => void
+  ): Phaser.GameObjects.Text {
+    const text = this.add.text(x, y, label, {
+      fontFamily: 'Arial',
+      fontSize: '19px',
+      color: '#0f172a',
+      backgroundColor: '#dbeafe',
+      padding: { x: 8, y: 6 }
+    });
+    text.setInteractive({ useHandCursor: true });
+    text.on('pointerdown', () => {
+      this.audio.unlock();
+      onClick();
+    });
+    return text;
+  }
+
+  private persistSettings(): void {
+    saveUiSettings(this.settings);
+    this.audio.applySettings(this.settings);
+    this.refreshSettingsPanelLabels();
+  }
+
+  private refreshSettingsPanelLabels(): void {
+    this.settingsMusicMuteText?.setText(`Music Mute: ${this.settings.musicMuted ? 'On' : 'Off'}`);
+    this.settingsSfxMuteText?.setText(`SFX Mute: ${this.settings.sfxMuted ? 'On' : 'Off'}`);
+    this.settingsMusicVolumeText?.setText(`Music Vol: ${Math.round(this.settings.musicVolume * 100)}%`);
+    this.settingsSfxVolumeText?.setText(`SFX Vol: ${Math.round(this.settings.sfxVolume * 100)}%`);
+  }
+
+  private toggleSettingsPanel(next?: boolean): void {
+    this.settingsPanelVisible = next ?? !this.settingsPanelVisible;
+    this.settingsPanel.setVisible(this.settingsPanelVisible);
+    if (this.settingsPanelVisible) {
+      this.refreshSettingsPanelLabels();
+    }
+  }
+
+  private async handleReconnect(): Promise<void> {
+    if (this.mode !== 'online') {
+      return;
+    }
+
+    const role = onlineSession.getRole();
+    if (!role) {
+      this.gameState.lastAction = 'Online role unavailable. Return to menu and host/join again.';
+      this.renderHud();
+      return;
+    }
+
+    this.audio.unlock();
+
+    try {
+      if (role === 'host') {
+        const offer = await onlineSession.reconnectHost();
+        window.prompt('Share this RECONNECT OFFER code with opponent', offer);
+        const answer = window.prompt('Paste RECONNECT ANSWER code from opponent');
+        if (!answer) {
+          this.gameState.lastAction = 'Reconnect canceled.';
+          this.renderHud();
+          return;
+        }
+        await onlineSession.hostAcceptAnswer(answer.trim());
+        this.gameState.lastAction = 'Reconnect answer accepted. Waiting for channel...';
+        this.renderHud();
+        return;
+      }
+
+      const offer = window.prompt('Paste RECONNECT OFFER code from host');
+      if (!offer) {
+        this.gameState.lastAction = 'Reconnect canceled.';
+        this.renderHud();
+        return;
+      }
+      this.awaitingSnapshot = true;
+      const answer = await onlineSession.reconnectGuest(offer.trim());
+      window.prompt('Send this RECONNECT ANSWER code back to host', answer);
+      this.gameState.lastAction = 'Reconnect answer created. Waiting for host channel...';
+      this.renderHud();
+    } catch (error) {
+      this.gameState.lastAction = `Reconnect failed: ${String(error)}`;
+      this.renderHud();
+    }
+  }
+}
