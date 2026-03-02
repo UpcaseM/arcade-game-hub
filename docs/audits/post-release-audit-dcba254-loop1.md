@@ -1,20 +1,21 @@
-# Post-Release Audit Report (Loop 7 Update)
+# Post-Release Audit Report (Loop 8 Update)
 
 - Commit: `dcba254`
 - Date: 2026-03-02
 - Scope: UI simplification, lobby provider fallback, responsive hub/embed behavior, and test coverage.
-- Inputs: `plan.json` (ship-20260302T041326Z-e62cec86), `review_report.loop-6.json`, source/tests/build artifacts.
+- Inputs: `plan.json` (ship-20260302T050424Z-a8c582be), `review_report.loop-0.json`, source/tests/build artifacts.
 
-## Loop 7 Delta
+## Loop 8 Delta
 
 - Re-ran all required automated gates from the plan:
   - `dou-shou-qi` focused unit suites (`lobbyStore`, `onlineSession`) pass.
   - Hub auth regression test passes.
   - Static path validation passes.
   - `dou-shou-qi` production build passes.
-- Reconfirmed loop-6 blocking issues remain unresolved in this sandbox:
+- Reconfirmed loop-7 blocking issues remain unresolved in this sandbox:
   - Real browser runtime validation is still unavailable for responsive, UI smoke, and provider-failure simulations.
-  - Screenshot artifact generation remains unavailable in this environment.
+  - Screenshot artifact generation remains unavailable in this environment (Playwright browsers not installable here).
+  - Local static serving remains blocked (`python3 -m http.server 8000` fails with `PermissionError: [Errno 1] Operation not permitted`).
 
 ## Work Package Status
 
@@ -42,16 +43,18 @@
 | AC9 | Partial | Paging controls present in code; runtime interaction still unverified in this environment. |
 | AC10 | Pass | Hub class toggle logic remains code-verified. |
 | AC11 | **Fail (runtime evidence missing)** | Mobile/desktop runtime checks (~390/~560/~860 + desktop + rotation) still blocked here. |
-| AC12 | Pass | All required automated checks pass in loop 7. |
+| AC12 | Pass | All required automated checks pass in loop 8. |
 | AC13 | Pass | No new assets introduced. |
 
-## Commands Run and Results (Loop 7)
+## Commands Run and Results (Loop 8)
 
 - `cd dou-shou-qi && npm test -- --run src/net/lobbyStore.test.ts` -> pass (`7/7`)
 - `cd dou-shou-qi && npm test -- --run src/net/onlineSession.test.ts` -> pass (`5/5`)
+- `cd dou-shou-qi && npm test` -> pass (`36/36`)
 - `node --test tools/auth.test.mjs` -> pass
 - `node tools/validate-static-paths.mjs` -> pass (`Static path validation passed.`)
 - `cd dou-shou-qi && npm run build` -> pass (build completes; `dist/index.html` + `dist/main.js` emitted)
+- `python3 -m http.server 8000` -> blocked by sandbox (`PermissionError: [Errno 1] Operation not permitted`)
 - Runtime browser/manual matrix execution -> blocked in this sandbox environment (external follow-up required)
 - Snapshot artifact generation -> blocked in this sandbox environment (external follow-up required)
 
