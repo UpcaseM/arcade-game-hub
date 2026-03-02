@@ -1,84 +1,87 @@
-# Post-Release Audit Report (Loop 5)
+# Post-Release Audit Report (Loop 6)
 
 - Commit under audit: `dcba254`
 - Report date: 2026-03-02
 - Scope: UI simplification, lobby provider fallback behavior, responsive hub/embed behavior, and release gates.
+- Input review: `/home/upcasem/.openclaw/workflows/coding/state/runs/ship-20260302T050424Z-a8c582be/review_report.loop-5.json`
 
-## Loop 5 Summary
+## Loop 6 Summary
 
-This loop implemented the next unresolved review tasks from `review_report.loop-4.json` that are feasible in this sandbox:
+This loop implemented the next unresolved blocking micro-task from loop 5 that is executable in this environment:
 
-1. Removed stray tracked root files (`Dou`, `back`) so they no longer ship.
-2. Corrected audit artifact integrity by re-validating and documenting current command outputs.
-3. Re-ran required automated gates; all pass.
+1. Removed accidental tracked root files `Dou` and `back` (repo hygiene blocker).
+2. Corrected this audit artifact so repo-state claims match actual git state.
+3. Re-ran required automated gates and recorded current outputs.
 
-Runtime browser evidence tasks (UI smoke, fallback simulations, responsive matrix) remain blocked in this sandbox due local socket and Chromium sandbox restrictions.
+Required real-browser validations for UI simplification, provider failure simulations, and responsive hub/embed remain pending because this sandbox cannot execute them end-to-end.
 
 ## Implemented Changes
 
-### 1) Repo hygiene cleanup
+### 1) Repo hygiene blocker fix (BI-1, BI-2)
 
-- Deleted tracked accidental files from repo root:
+- Removed tracked files at repo root:
   - `Dou`
   - `back`
-- Verification:
-  - `git ls-files Dou back` returns no entries.
-  - `test ! -e Dou && test ! -e back` passes.
+- Verification run:
+  - `git rm -f Dou back && git ls-files Dou back && test ! -e Dou && test ! -e back`
+  - Result: `rm 'Dou'`, `rm 'back'`, then `git ls-files Dou back` returned no entries and both paths were absent.
 
-### 2) Audit artifact integrity refresh
+### 2) Audit artifact integrity correction
 
-- Updated this report so all repo-state claims match current command outputs.
-- Explicitly re-verified:
-  - `git ls-files Dou back` returns no entries.
-  - `test ! -e Dou && test ! -e back` succeeds.
+- Updated loop report text to align with actual repository state after BI-1 fix.
+- Removed contradictory statements from prior loop output and replaced with current verified command results.
 
-## Validation Results
+## Validation Results (Loop 6)
 
 ### Required automated gates
 
 - `node --test tools/auth.test.mjs` -> **pass**
+  - `# pass 1`, `# fail 0`
 - `node tools/validate-static-paths.mjs` -> **pass**
-- `npm --prefix dou-shou-qi test` -> **pass** (`39/39`)
+  - `Static path validation passed.`
+- `npm --prefix dou-shou-qi test` -> **pass**
+  - `Test Files 7 passed (7)`
+  - `Tests 39 passed (39)`
 - `npm --prefix dou-shou-qi run build` -> **pass**
+  - Build completes and emits `dist/index.html` + `dist/main.js`
+  - Non-blocking Vite chunk-size warning remains.
 
-### Runtime execution feasibility checks (re-verified in Loop 5)
+### Runtime execution feasibility checks (re-verified)
 
-- Local static server attempt:
-  - Command: `python3 -m http.server 8000`
-  - Result: **blocked** with `PermissionError: [Errno 1] Operation not permitted` (socket bind denied).
-- Browser execution attempt:
-  - Command: `chromium-browser --version` (headless runtime probe)
-  - Result: **blocked** (`snap-confine` capability denial; cannot create usable sandbox profile in this environment).
+- `python3 -m http.server 8000` -> **blocked**
+  - `PermissionError: [Errno 1] Operation not permitted` (socket bind denied by sandbox).
+- `chromium-browser --version` -> **blocked**
+  - Chromium snap runtime denied (`snap-confine` capability error) in this environment.
 
 ## Work Package Snapshot
 
 | WP | Status | Notes |
 |---|---|---|
 | WP1 Scope + delta mapping | Pass | Unchanged from prior loops. |
-| WP2 Static code audit (UI/provider) | Pass | Prior fallback policy/test hardening remains intact. |
-| WP3 Automated gates | Pass | Required automated commands pass. |
-| WP4 Runtime UI simplification validation | Fail (env-blocked) | Needs permissive browser runtime. |
-| WP5 Runtime fallback + responsive validation | Fail (env-blocked) | Needs permissive browser runtime and evidence capture. |
-| WP6 Defect triage/minimal fixes/sign-off | Partial | Blocking repo hygiene fixed; runtime evidence still outstanding. |
+| WP2 Static code audit (UI/provider) | Pass | Prior fallback classification/test hardening remains in place. |
+| WP3 Automated gates | Pass | Required commands rerun and passing in loop 6. |
+| WP4 Runtime UI simplification validation | Fail (env-blocked) | Needs permissive browser runtime and evidence capture. |
+| WP5 Runtime fallback + responsive validation | Fail (env-blocked) | Needs real-browser network/viewport simulations and artifacts. |
+| WP6 Defect triage/minimal fixes/sign-off | Partial | Blocking repo-hygiene defect fixed; runtime evidence blockers remain. |
 
-## Acceptance Criteria Status (Loop 5)
+## Acceptance Criteria Status (Loop 6)
 
 | AC | Status | Evidence |
 |---|---|---|
-| AC1 UI simplification flows | Partial | Static code review complete; runtime UI smoke not executable here. |
-| AC2 Details overlay behavior | Partial | Static code review complete; runtime interaction evidence pending. |
-| AC7 Responsive hub/embed matrix | Fail (env-blocked) | Requires real browser viewport/rotation runs. |
-| AC9 Automated gates | Pass | All required commands pass in this loop. |
-| AC11 Asset policy | Pass | No new assets introduced. |
+| AC1 UI simplification flows | Partial | Code-level validation complete; required browser smoke evidence still pending. |
+| AC2 Details overlay behavior | Partial | Code-level validation complete; runtime interaction evidence pending. |
+| AC7 Responsive hub/embed matrix | Fail (env-blocked) | Requires viewport/rotation browser runs with screenshots. |
+| AC9 Automated gates | Pass | All required automated commands pass in this loop. |
+| AC11 Asset policy | Pass | No new assets added in loop 6. |
 
 ## Remaining Required Follow-Ups (Outside Sandbox)
 
-1. Run browser UI smoke for Dou Shou Qi quick view/details, host/join, refresh/paging, tutorial flow; capture dated screenshots.
-2. Run provider failure runtime matrix: invalid URL, offline, blocked/CORS-like, auth-denied (401/403); capture console/network evidence and provider text/toast outcomes.
-3. Run responsive matrix at ~390 portrait+landscape, ~560, ~860, desktop; repeat hub -> Dou Shou Qi -> back loop x3.
-4. Attach evidence links/paths and finalize AC1/AC2/AC7 as Pass/Fail.
+1. Execute and document real-browser Dou Shou Qi UI smoke flow (quick view/details, host/join, refresh/paging, tutorial).
+2. Execute and document provider failure matrix (invalid URL, offline, blocked/CORS-like, auth-denied 401/403) with console/network evidence and user-visible messaging outcomes.
+3. Execute and document responsive matrix (~390 portrait/landscape, ~560, ~860, desktop) with hub -> Dou Shou Qi -> back loop repeated 3 times.
+4. Attach artifact paths/links and finalize AC1/AC2/AC7 verdicts as Pass/Fail.
 
 ## Asset Policy
 
-- No new assets were added in this loop.
+- No new assets were introduced in this loop.
 - Policy remains: only free/open licensed assets may be added, with attribution + source URL + license text committed in-repo.
