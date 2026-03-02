@@ -1,6 +1,5 @@
 import Phaser from 'phaser';
 import {
-  ANIMAL_SYMBOLS,
   BOARD_COLS,
   BOARD_OFFSET_X,
   BOARD_OFFSET_Y,
@@ -9,33 +8,43 @@ import {
   createInitialGameState,
   flipAnimal,
   getAnimalAtCell,
-  getCurrentPlayerColor,
   getValidMoves,
   isOwnedByCurrentTurn,
   moveAnimal
 } from '../../data/gameData';
-import { Animal, GameState } from '../../data/types';
+import { Animal, GameState, PlayerTurn } from '../../data/types';
+import { HudView } from '../ui/HudView';
+import { PieceView } from '../ui/PieceView';
+import { WinOverlay } from '../ui/WinOverlay';
+import { flashCells } from '../ui/fx/BoardHintsFx';
+import { playCaptureImpact } from '../ui/fx/CaptureFx';
+import { playFlipReveal } from '../ui/fx/FlipFx';
+import { playMoveTween, showMoveTrail } from '../ui/fx/MoveFx';
+import { startSelectionPulse } from '../ui/fx/SelectionFx';
+import { showTurnTransition } from '../ui/fx/TurnTransitionFx';
+import { UiSettings, loadUiSettings } from '../ui/settings';
+import { NEUTRAL_COLORS, getPlayerIdentity } from '../ui/theme';
 
-const COLOR_HEX = {
-  blue: '#60a5fa',
-  red: '#f87171'
-} as const;
-
-const PLAYER_LABEL = {
+const PLAYER_LABEL: Record<PlayerTurn, string> = {
   player1: 'Player 1',
   player2: 'Player 2'
-} as const;
+};
 
 export class DouShouQiGameScene extends Phaser.Scene {
   private gameState!: GameState;
   private boardGraphics!: Phaser.GameObjects.Graphics;
-  private pieceSprites: Map<string, Phaser.GameObjects.Text> = new Map();
-  private highlightRects: Phaser.GameObjects.Rectangle[] = [];
+  private boardCue!: Phaser.GameObjects.Rectangle;
 
-  private turnText!: Phaser.GameObjects.Text;
-  private roleText!: Phaser.GameObjects.Text;
-  private infoText!: Phaser.GameObjects.Text;
-  private actionText!: Phaser.GameObjects.Text;
+  private readonly pieceViews = new Map<string, PieceView>();
+  private moveHintRects: Phaser.GameObjects.Rectangle[] = [];
+  private moveHintDots: Phaser.GameObjects.Arc[] = [];
+
+  private hudView!: HudView;
+  private winOverlay!: WinOverlay;
+  private settings!: UiSettings;
+
+  private actionLocked = false;
+  private selectionPulse?: Phaser.Tweens.Tween;
 
   constructor() {
     super('DouShouQiGameScene');
@@ -43,12 +52,14 @@ export class DouShouQiGameScene extends Phaser.Scene {
 
   init(): void {
     this.gameState = createInitialGameState();
+    this.settings = loadUiSettings();
+    this.actionLocked = false;
   }
 
   create(): void {
     this.createBoard();
     this.createUI();
-    this.renderPieces();
+    this.syncPieceViewsToState();
     this.renderHud();
     this.setupInput();
   }
@@ -59,13 +70,13 @@ export class DouShouQiGameScene extends Phaser.Scene {
     const width = BOARD_COLS * CELL_SIZE;
     const height = BOARD_ROWS * CELL_SIZE;
 
-    this.boardGraphics.fillStyle(0x0b1220, 1);
+    this.boardGraphics.fillStyle(NEUTRAL_COLORS.boardBg, 1);
     this.boardGraphics.fillRect(BOARD_OFFSET_X, BOARD_OFFSET_Y, width, height);
 
-    this.boardGraphics.lineStyle(3, 0x334155, 1);
+    this.boardGraphics.lineStyle(3, NEUTRAL_COLORS.boardOuter, 1);
     this.boardGraphics.strokeRect(BOARD_OFFSET_X, BOARD_OFFSET_Y, width, height);
 
-    this.boardGraphics.lineStyle(2, 0x1e293b, 1);
+    this.boardGraphics.lineStyle(2, NEUTRAL_COLORS.boardLine, 1);
     for (let r = 1; r < BOARD_ROWS; r += 1) {
       const y = BOARD_OFFSET_Y + r * CELL_SIZE;
       this.boardGraphics.lineBetween(BOARD_OFFSET_X, y, BOARD_OFFSET_X + width, y);
@@ -74,37 +85,34 @@ export class DouShouQiGameScene extends Phaser.Scene {
       const x = BOARD_OFFSET_X + c * CELL_SIZE;
       this.boardGraphics.lineBetween(x, BOARD_OFFSET_Y, x, BOARD_OFFSET_Y + height);
     }
+
+    this.boardCue = this.add.rectangle(
+      BOARD_OFFSET_X + width / 2,
+      BOARD_OFFSET_Y + height / 2,
+      width + 8,
+      height + 8
+    );
+    this.boardCue.setStrokeStyle(3, 0xfacc15, 0);
+    this.boardCue.setDepth(1);
   }
 
   private createUI(): void {
-    this.turnText = this.add.text(24, 24, '', {
-      fontSize: '22px',
-      color: '#e2e8f0',
-      fontFamily: 'Arial'
+    this.hudView = new HudView(this);
+    this.winOverlay = new WinOverlay(this);
+
+    const assistText = this.settings.colorAssist ? 'Color-assist on' : 'Color-assist off';
+    const motionText = this.settings.reducedMotion ? 'Reduced motion on' : 'Reduced motion off';
+
+    this.add.text(24, 612, `${assistText} | ${motionText}`, {
+      fontFamily: 'Arial',
+      fontSize: '14px',
+      color: '#94a3b8'
     });
 
-    this.roleText = this.add.text(24, 56, '', {
-      fontSize: '18px',
-      color: '#94a3b8',
-      fontFamily: 'Arial'
-    });
-
-    this.infoText = this.add.text(24, 86, '', {
-      fontSize: '16px',
-      color: '#cbd5e1',
-      fontFamily: 'Arial'
-    });
-
-    this.actionText = this.add.text(24, 116, '', {
-      fontSize: '15px',
-      color: '#93c5fd',
-      fontFamily: 'Arial'
-    });
-
-    const backButton = this.add.text(24, 640, '← Back to Menu', {
+    const backButton = this.add.text(24, 634, '← Back to Menu', {
+      fontFamily: 'Arial',
       fontSize: '20px',
-      color: '#3b82f6',
-      fontFamily: 'Arial'
+      color: '#3b82f6'
     });
     backButton.setInteractive({ useHandCursor: true });
     backButton.on('pointerdown', () => this.scene.start('DouShouQiMainMenuScene'));
@@ -112,7 +120,7 @@ export class DouShouQiGameScene extends Phaser.Scene {
 
   private setupInput(): void {
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
-      if (this.gameState.status !== 'playing') {
+      if (this.actionLocked || this.gameState.status !== 'playing') {
         return;
       }
 
@@ -122,15 +130,15 @@ export class DouShouQiGameScene extends Phaser.Scene {
         return;
       }
 
-      this.handleCellTap(col, row);
+      void this.handleCellTap(col, row);
     });
   }
 
-  private handleCellTap(col: number, row: number): void {
+  private async handleCellTap(col: number, row: number): Promise<void> {
     const piece = getAnimalAtCell(this.gameState, col, row);
 
     if (piece?.hidden) {
-      this.handleFlip(piece);
+      await this.handleFlip(piece);
       return;
     }
 
@@ -143,7 +151,7 @@ export class DouShouQiGameScene extends Phaser.Scene {
         return;
       }
 
-      const moved = this.handleMove(selectedPiece, col, row);
+      const moved = await this.handleMove(selectedPiece, col, row);
       if (moved) {
         return;
       }
@@ -161,174 +169,245 @@ export class DouShouQiGameScene extends Phaser.Scene {
     }
   }
 
-  private handleFlip(piece: Animal): void {
+  private async handleFlip(piece: Animal): Promise<void> {
+    this.actionLocked = true;
+
     const result = flipAnimal(this.gameState, piece.id);
     if (!result.success) {
       this.gameState.lastAction = result.reason;
       this.renderHud();
+      this.actionLocked = false;
       return;
     }
 
     this.clearSelection();
-    this.renderPieces();
+
+    const view = this.pieceViews.get(piece.id);
+    if (view) {
+      await playFlipReveal(
+        this,
+        view.container,
+        () => {
+          const identity = result.flippedAnimal ? getPlayerIdentity(result.flippedAnimal.color) : undefined;
+          view.updateFromAnimal(piece, identity, this.settings.colorAssist);
+        },
+        this.settings.reducedMotion
+      );
+    }
+
+    this.syncPieceViewsToState();
     this.renderHud();
+
+    flashCells(this, [{ col: piece.col, row: piece.row }], this.cellCenter, 0x38bdf8, this.settings.reducedMotion);
+    this.pulseBoardCue();
+    this.showTurnCue();
 
     if (result.winStatus && result.winStatus !== 'playing') {
       this.showResult();
     }
+
+    this.actionLocked = false;
   }
 
-  private handleMove(selectedPiece: Animal, targetCol: number, targetRow: number): boolean {
+  private async handleMove(selectedPiece: Animal, targetCol: number, targetRow: number): Promise<boolean> {
+    const movingView = this.pieceViews.get(selectedPiece.id);
+    if (!movingView) {
+      return false;
+    }
+
+    const fromCol = selectedPiece.col;
+    const fromRow = selectedPiece.row;
+    const fromPoint = this.cellCenter(fromCol, fromRow);
+    const toPoint = this.cellCenter(targetCol, targetRow);
+
     const result = moveAnimal(this.gameState, selectedPiece.id, targetCol, targetRow);
     if (!result.success) {
       return false;
     }
 
+    this.actionLocked = true;
     this.clearSelection();
-    this.renderPieces();
+
+    const currentColor = this.gameState.playerColors[this.gameState.currentTurn];
+    const trailColor = currentColor ? getPlayerIdentity(currentColor).primaryColor : 0x38bdf8;
+    showMoveTrail(this, fromPoint, toPoint, trailColor, this.settings.reducedMotion);
+
+    await playMoveTween(this, movingView.container, toPoint.x, toPoint.y, this.settings.reducedMotion);
+
+    const capturedId = result.capturedAnimal?.id;
+    if (capturedId) {
+      const capturedView = this.pieceViews.get(capturedId);
+      if (capturedView) {
+        await playCaptureImpact(this, toPoint, capturedView.container, this.settings.reducedMotion);
+      }
+    }
+
+    this.syncPieceViewsToState();
     this.renderHud();
+
+    flashCells(
+      this,
+      [
+        { col: fromCol, row: fromRow },
+        { col: targetCol, row: targetRow }
+      ],
+      this.cellCenter,
+      0xf59e0b,
+      this.settings.reducedMotion
+    );
+
+    this.pulseBoardCue();
+    this.showTurnCue();
 
     if (result.winStatus && result.winStatus !== 'playing') {
       this.showResult();
     }
 
+    this.actionLocked = false;
     return true;
   }
 
   private selectPiece(piece: Animal): void {
     this.gameState.selectedAnimalId = piece.id;
     this.gameState.validMoves = getValidMoves(this.gameState, piece);
-    this.renderPieces();
-    this.renderHighlights();
+    this.renderMoveHints();
+    this.updateSelectionVisuals();
   }
 
   private clearSelection(): void {
     this.gameState.selectedAnimalId = undefined;
     this.gameState.validMoves = undefined;
-    this.clearHighlights();
-    this.renderPieces();
+    this.clearMoveHints();
+    this.updateSelectionVisuals();
     this.renderHud();
   }
 
-  private clearHighlights(): void {
-    this.highlightRects.forEach((rect) => rect.destroy());
-    this.highlightRects = [];
-  }
+  private updateSelectionVisuals(): void {
+    const selectedId = this.gameState.selectedAnimalId;
 
-  private renderHighlights(): void {
-    this.clearHighlights();
-    const moves = this.gameState.validMoves ?? [];
+    if (this.selectionPulse) {
+      this.selectionPulse.stop();
+      this.selectionPulse = undefined;
+    }
 
-    moves.forEach(({ col, row }) => {
-      const rect = this.add.rectangle(
-        BOARD_OFFSET_X + col * CELL_SIZE + CELL_SIZE / 2,
-        BOARD_OFFSET_Y + row * CELL_SIZE + CELL_SIZE / 2,
-        CELL_SIZE - 16,
-        CELL_SIZE - 16,
-        0x22c55e,
-        0.24
-      );
-      rect.setStrokeStyle(2, 0x22c55e, 0.9);
-      this.highlightRects.push(rect);
-    });
-  }
-
-  private renderPieces(): void {
-    this.pieceSprites.forEach((sprite) => sprite.destroy());
-    this.pieceSprites.clear();
-
-    Object.values(this.gameState.animals).forEach((piece) => {
-      const isSelected = this.gameState.selectedAnimalId === piece.id;
-      const label = piece.hidden ? '◆' : ANIMAL_SYMBOLS[piece.name] ?? '●';
-
-      const sprite = this.add.text(
-        BOARD_OFFSET_X + piece.col * CELL_SIZE + CELL_SIZE / 2,
-        BOARD_OFFSET_Y + piece.row * CELL_SIZE + CELL_SIZE / 2,
-        label,
-        {
-          fontSize: piece.hidden ? '40px' : '38px',
-          color: piece.hidden ? '#e2e8f0' : COLOR_HEX[piece.color],
-          fontFamily: 'Arial',
-          backgroundColor: piece.hidden ? '#334155' : '#0f172a',
-          padding: { x: 12, y: 8 }
-        }
-      );
-
-      sprite.setOrigin(0.5);
-      sprite.setDepth(2);
-
-      if (isSelected) {
-        sprite.setStroke('#facc15', 3);
+    this.pieceViews.forEach((view, pieceId) => {
+      const selected = selectedId === pieceId;
+      view.setSelected(selected);
+      if (!selected) {
+        view.setScale(1);
+        return;
       }
 
-      this.pieceSprites.set(piece.id, sprite);
+      this.selectionPulse = startSelectionPulse(this, view.container, this.settings.reducedMotion);
+    });
+  }
+
+  private clearMoveHints(): void {
+    this.moveHintRects.forEach((shape) => shape.destroy());
+    this.moveHintDots.forEach((shape) => shape.destroy());
+    this.moveHintRects = [];
+    this.moveHintDots = [];
+  }
+
+  private renderMoveHints(): void {
+    this.clearMoveHints();
+
+    (this.gameState.validMoves ?? []).forEach(({ col, row }) => {
+      const { x, y } = this.cellCenter(col, row);
+
+      const cell = this.add.rectangle(x, y, CELL_SIZE - 14, CELL_SIZE - 14, 0x22c55e, 0.14);
+      cell.setStrokeStyle(2, 0x4ade80, 0.92);
+      cell.setDepth(2);
+
+      const dot = this.add.circle(x, y, 6, 0x86efac, 0.95);
+      dot.setDepth(3);
+
+      this.moveHintRects.push(cell);
+      this.moveHintDots.push(dot);
+    });
+  }
+
+  private syncPieceViewsToState(): void {
+    const activeIds = new Set(Object.keys(this.gameState.animals));
+
+    this.pieceViews.forEach((view, id) => {
+      if (!activeIds.has(id)) {
+        view.destroy();
+        this.pieceViews.delete(id);
+      }
     });
 
-    this.renderHighlights();
+    Object.values(this.gameState.animals).forEach((animal) => {
+      const center = this.cellCenter(animal.col, animal.row);
+      let view = this.pieceViews.get(animal.id);
+      if (!view) {
+        view = new PieceView(this, animal, center.x, center.y);
+        this.pieceViews.set(animal.id, view);
+      }
+
+      const identity = animal.hidden ? undefined : getPlayerIdentity(animal.color);
+      view.updateFromAnimal(animal, identity, this.settings.colorAssist);
+      view.setPosition(center.x, center.y);
+      view.setAlpha(1);
+      view.setScale(1);
+      view.setVisible(true);
+    });
+
+    this.updateSelectionVisuals();
+    this.renderMoveHints();
   }
 
   private renderHud(): void {
-    const currentColor = getCurrentPlayerColor(this.gameState);
-    const p1Color = this.gameState.playerColors.player1;
-    const p2Color = this.gameState.playerColors.player2;
+    this.hudView.update(this.gameState);
+  }
 
-    this.turnText.setText(`Turn: ${PLAYER_LABEL[this.gameState.currentTurn]}`);
+  private pulseBoardCue(): void {
+    this.boardCue.setAlpha(0.85);
+    this.boardCue.setStrokeStyle(3, 0xfacc15, 0.9);
 
-    if (!p1Color || !p2Color) {
-      this.roleText.setText('Opening phase: flip any face-down piece to assign colors');
-    } else {
-      this.roleText.setText(`Player 1 = ${p1Color.toUpperCase()}  |  Player 2 = ${p2Color.toUpperCase()}`);
-    }
+    this.tweens.add({
+      targets: this.boardCue,
+      alpha: 0,
+      duration: this.settings.reducedMotion ? 120 : 220,
+      ease: 'Quad.easeOut'
+    });
 
-    const blueLeft = Object.values(this.gameState.animals).filter((a) => a.color === 'blue').length;
-    const redLeft = Object.values(this.gameState.animals).filter((a) => a.color === 'red').length;
-    const hiddenLeft = Object.values(this.gameState.animals).filter((a) => a.hidden).length;
+    this.hudView.pulseTurnChip(this, this.settings.reducedMotion);
+  }
 
-    const phaseHint = currentColor
-      ? `Current side: ${currentColor.toUpperCase()} | Blue: ${blueLeft}  Red: ${redLeft}  Hidden: ${hiddenLeft}`
-      : `Blue: ${blueLeft}  Red: ${redLeft}  Hidden: ${hiddenLeft}`;
-
-    this.infoText.setText(phaseHint);
-    this.actionText.setText(this.gameState.lastAction ?? 'Tip: Flip first, then move your own revealed pieces.');
+  private showTurnCue(): void {
+    const color = this.gameState.playerColors[this.gameState.currentTurn];
+    const identity = color ? getPlayerIdentity(color) : undefined;
+    showTurnTransition(
+      this,
+      `${PLAYER_LABEL[this.gameState.currentTurn]} to act`,
+      identity?.textColor ?? '#e2e8f0',
+      this.settings.reducedMotion
+    );
   }
 
   private showResult(): void {
-    const winner = this.gameState.status === 'blue_won' ? 'BLUE wins!' : 'RED wins!';
+    const winnerColor = this.gameState.status === 'blue_won' ? 'blue' : 'red';
+    const winnerIdentity = getPlayerIdentity(winnerColor);
+    const winnerText = `${winnerIdentity.label} wins`;
 
-    const panel = this.add.rectangle(500, 340, 460, 220, 0x0f172a, 0.94);
-    panel.setStrokeStyle(3, 0x38bdf8, 0.8);
-    panel.setDepth(20);
+    const blueLeft = Object.values(this.gameState.animals).filter((animal) => animal.color === 'blue').length;
+    const redLeft = Object.values(this.gameState.animals).filter((animal) => animal.color === 'red').length;
 
-    const title = this.add.text(500, 290, winner, {
-      fontSize: '42px',
-      color: '#22d3ee',
-      fontFamily: 'Arial'
+    this.winOverlay.show({
+      winnerText,
+      summary: `Pieces remaining - Blue ${blueLeft} | Red ${redLeft}`,
+      winnerIdentity,
+      reducedMotion: this.settings.reducedMotion,
+      onReplay: () => this.scene.restart(),
+      onMenu: () => this.scene.start('DouShouQiMainMenuScene')
     });
-    title.setOrigin(0.5);
-    title.setDepth(21);
+  }
 
-    const replay = this.add.text(500, 350, 'Play Again', {
-      fontSize: '30px',
-      color: '#f8fafc',
-      fontFamily: 'Arial',
-      backgroundColor: '#2563eb',
-      padding: { x: 14, y: 8 }
-    });
-    replay.setOrigin(0.5);
-    replay.setDepth(21);
-    replay.setInteractive({ useHandCursor: true });
-    replay.on('pointerdown', () => this.scene.restart());
-
-    const menu = this.add.text(500, 402, 'Back to Menu', {
-      fontSize: '24px',
-      color: '#0f172a',
-      fontFamily: 'Arial',
-      backgroundColor: '#e2e8f0',
-      padding: { x: 10, y: 6 }
-    });
-    menu.setOrigin(0.5);
-    menu.setDepth(21);
-    menu.setInteractive({ useHandCursor: true });
-    menu.on('pointerdown', () => this.scene.start('DouShouQiMainMenuScene'));
+  private cellCenter(col: number, row: number): { x: number; y: number } {
+    return {
+      x: BOARD_OFFSET_X + col * CELL_SIZE + CELL_SIZE / 2,
+      y: BOARD_OFFSET_Y + row * CELL_SIZE + CELL_SIZE / 2
+    };
   }
 }
