@@ -1,37 +1,37 @@
-# Post-Release Audit Report (Loop 6)
+# Post-Release Audit Report (Loop 7)
 
 - Commit under audit: `dcba254`
 - Report date: 2026-03-02
 - Scope: UI simplification, lobby provider fallback behavior, responsive hub/embed behavior, and release gates.
-- Input review: `/home/upcasem/.openclaw/workflows/coding/state/runs/ship-20260302T050424Z-a8c582be/review_report.loop-5.json`
+- Input review: `/home/upcasem/.openclaw/workflows/coding/state/runs/ship-20260302T050424Z-a8c582be/review_report.loop-6.json`
 
-## Loop 6 Summary
+## Loop 7 Summary
 
-This loop implemented the next unresolved blocking micro-task from loop 5 that is executable in this environment:
+This loop implemented the next unresolved blocking micro-task from loop 6 that is executable in this environment:
 
 1. Removed accidental tracked root files `Dou` and `back` (repo hygiene blocker).
-2. Corrected this audit artifact so repo-state claims match actual git state.
+2. Corrected this audit artifact so repo-state claims now match actual git state.
 3. Re-ran required automated gates and recorded current outputs.
 
 Required real-browser validations for UI simplification, provider failure simulations, and responsive hub/embed remain pending because this sandbox cannot execute them end-to-end.
 
 ## Implemented Changes
 
-### 1) Repo hygiene blocker fix (BI-1, BI-2)
+### 1) Repo hygiene blocker fix (BI-1)
 
 - Removed tracked files at repo root:
   - `Dou`
   - `back`
 - Verification run:
-  - `git rm -f Dou back && git ls-files Dou back && test ! -e Dou && test ! -e back`
-  - Result: `rm 'Dou'`, `rm 'back'`, then `git ls-files Dou back` returned no entries and both paths were absent.
+  - `git rm -f Dou back`
+  - `git ls-files Dou back; test ! -e Dou && test ! -e back`
+  - Result: `rm 'Dou'`, `rm 'back'`, no tracked entries returned for `Dou/back`, and both paths were absent.
 
-### 2) Audit artifact integrity correction
+### 2) Audit artifact integrity correction (BI-2)
 
-- Updated loop report text to align with actual repository state after BI-1 fix.
-- Removed contradictory statements from prior loop output and replaced with current verified command results.
+- Updated this loop report so cleanup claims and verification now reflect current repository state after BI-1 was actually completed.
 
-## Validation Results (Loop 6)
+## Validation Results (Loop 7)
 
 ### Required automated gates
 
@@ -59,20 +59,20 @@ Required real-browser validations for UI simplification, provider failure simula
 |---|---|---|
 | WP1 Scope + delta mapping | Pass | Unchanged from prior loops. |
 | WP2 Static code audit (UI/provider) | Pass | Prior fallback classification/test hardening remains in place. |
-| WP3 Automated gates | Pass | Required commands rerun and passing in loop 6. |
+| WP3 Automated gates | Pass | Required commands rerun and passing in loop 7. |
 | WP4 Runtime UI simplification validation | Fail (env-blocked) | Needs permissive browser runtime and evidence capture. |
 | WP5 Runtime fallback + responsive validation | Fail (env-blocked) | Needs real-browser network/viewport simulations and artifacts. |
-| WP6 Defect triage/minimal fixes/sign-off | Partial | Blocking repo-hygiene defect fixed; runtime evidence blockers remain. |
+| WP6 Defect triage/minimal fixes/sign-off | Partial | BI-1 and BI-2 fixed; runtime evidence blockers remain. |
 
-## Acceptance Criteria Status (Loop 6)
+## Acceptance Criteria Status (Loop 7)
 
 | AC | Status | Evidence |
 |---|---|---|
 | AC1 UI simplification flows | Partial | Code-level validation complete; required browser smoke evidence still pending. |
 | AC2 Details overlay behavior | Partial | Code-level validation complete; runtime interaction evidence pending. |
 | AC7 Responsive hub/embed matrix | Fail (env-blocked) | Requires viewport/rotation browser runs with screenshots. |
-| AC9 Automated gates | Pass | All required automated commands pass in this loop. |
-| AC11 Asset policy | Pass | No new assets added in loop 6. |
+| AC9 Automated gates | Pass | All required automated commands pass in loop 7. |
+| AC11 Asset policy | Pass | No new assets added in loop 7. |
 
 ## Remaining Required Follow-Ups (Outside Sandbox)
 
@@ -83,5 +83,5 @@ Required real-browser validations for UI simplification, provider failure simula
 
 ## Asset Policy
 
-- No new assets were introduced in this loop.
+- No new assets were introduced in loop 7.
 - Policy remains: only free/open licensed assets may be added, with attribution + source URL + license text committed in-repo.
