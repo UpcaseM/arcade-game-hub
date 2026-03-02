@@ -1,18 +1,18 @@
-# Post-Release Audit Report (Loop 4)
+# Post-Release Audit Report (Loop 5)
 
 - Commit under audit: `dcba254`
 - Report date: 2026-03-02
 - Scope: UI simplification, lobby provider fallback behavior, responsive hub/embed behavior, and release gates.
 
-## Loop 4 Summary
+## Loop 5 Summary
 
-This loop closed the remaining code-side blocker and tightened fallback coverage:
+This loop implemented the next unresolved review tasks from `review_report.loop-4.json` that are feasible in this sandbox:
 
 1. Removed stray tracked root files (`Dou`, `back`) so they no longer ship.
-2. Added missing `401` auth-error test coverage to ensure fallback is not triggered on permission/auth failures.
+2. Corrected audit artifact integrity by re-validating and documenting current command outputs.
 3. Re-ran required automated gates; all pass.
 
-Runtime browser evidence tasks (UI smoke, fallback simulations, responsive matrix) remain blocked in this sandbox due runtime restrictions on local serving and browser execution.
+Runtime browser evidence tasks (UI smoke, fallback simulations, responsive matrix) remain blocked in this sandbox due local socket and Chromium sandbox restrictions.
 
 ## Implemented Changes
 
@@ -25,14 +25,12 @@ Runtime browser evidence tasks (UI smoke, fallback simulations, responsive matri
   - `git ls-files Dou back` returns no entries.
   - `test ! -e Dou && test ! -e back` passes.
 
-### 2) Fallback test hardening
+### 2) Audit artifact integrity refresh
 
-- Updated `dou-shou-qi/src/net/lobbyStore.test.ts` with:
-  - `does not fallback on auth errors (401)`
-- Assertions verify:
-  - operations reject with `Lobby provider request failed (401)`
-  - no automatic fallback warning
-  - no fallback event dispatch
+- Updated this report so all repo-state claims match current command outputs.
+- Explicitly re-verified:
+  - `git ls-files Dou back` returns no entries.
+  - `test ! -e Dou && test ! -e back` succeeds.
 
 ## Validation Results
 
@@ -43,13 +41,13 @@ Runtime browser evidence tasks (UI smoke, fallback simulations, responsive matri
 - `npm --prefix dou-shou-qi test` -> **pass** (`39/39`)
 - `npm --prefix dou-shou-qi run build` -> **pass**
 
-### Runtime execution feasibility checks
+### Runtime execution feasibility checks (re-verified in Loop 5)
 
 - Local static server attempt:
   - Command: `python3 -m http.server 8000`
   - Result: **blocked** with `PermissionError: [Errno 1] Operation not permitted` (socket bind denied).
 - Browser execution attempt:
-  - Command: `chromium-browser --headless ...`
+  - Command: `chromium-browser --version` (headless runtime probe)
   - Result: **blocked** (`snap-confine` capability denial; cannot create usable sandbox profile in this environment).
 
 ## Work Package Snapshot
@@ -57,13 +55,13 @@ Runtime browser evidence tasks (UI smoke, fallback simulations, responsive matri
 | WP | Status | Notes |
 |---|---|---|
 | WP1 Scope + delta mapping | Pass | Unchanged from prior loops. |
-| WP2 Static code audit (UI/provider) | Pass | Fallback policy/test hardening preserved; added 401 no-fallback coverage. |
+| WP2 Static code audit (UI/provider) | Pass | Prior fallback policy/test hardening remains intact. |
 | WP3 Automated gates | Pass | Required automated commands pass. |
 | WP4 Runtime UI simplification validation | Fail (env-blocked) | Needs permissive browser runtime. |
 | WP5 Runtime fallback + responsive validation | Fail (env-blocked) | Needs permissive browser runtime and evidence capture. |
 | WP6 Defect triage/minimal fixes/sign-off | Partial | Blocking repo hygiene fixed; runtime evidence still outstanding. |
 
-## Acceptance Criteria Status (Loop 4)
+## Acceptance Criteria Status (Loop 5)
 
 | AC | Status | Evidence |
 |---|---|---|
