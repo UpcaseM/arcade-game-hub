@@ -34,6 +34,9 @@ A modern browser-based game hub built with plain HTML, CSS, and JavaScript.
 - `dojo-brawler/` - standalone static fighting game (HTML/CSS/JS + Kenney CC0 assets)
 - `dou-shou-qi/` - Dou Shou Qi Flip Mode source + committed `dist/` build for static deployment
 - `tools/validate-static-paths.mjs` - static path guard for GitHub Pages-compatible relative URLs
+- `tools/verify-review-artifacts.mjs` - review artifact/layout/hygiene verifier for release loops
+- `docs/manual-tests/` - separated manual runtime checklists and evidence conventions
+- `docs/review/ARTIFACTS.md` - stable review-loop artifact contract
 
 ## Run Locally
 
@@ -63,6 +66,7 @@ npm run build
 cd ..
 node --test tools/auth.test.mjs
 node tools/validate-static-paths.mjs
+node tools/verify-review-artifacts.mjs
 ```
 
 `dou-shou-qi/dist/` is intentionally tracked because GitHub Pages serves this repo directly from `/` without a build step.

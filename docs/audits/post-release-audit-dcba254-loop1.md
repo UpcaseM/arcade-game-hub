@@ -58,6 +58,13 @@ Updated `dou-shou-qi/src/net/lobbyStore.test.ts` to cover:
 
 ## Runtime Evidence Status
 
+Manual runtime matrices are maintained in dedicated checklist files:
+
+- `docs/manual-tests/dou-shou-qi-ui-smoke.md`
+- `docs/manual-tests/lobby-provider-failure-matrix.md`
+- `docs/manual-tests/responsive-hub-embed-matrix.md`
+- `docs/manual-tests/README.md`
+
 ### UI simplification smoke flow
 
 - Status: **blocked in this environment**

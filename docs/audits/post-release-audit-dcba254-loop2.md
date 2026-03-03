@@ -16,17 +16,22 @@ This loop implemented the next unresolved blocking micro-task from loop 7 that i
 
 Required real-browser validations for UI simplification, provider failure simulations, and responsive hub/embed remain pending because this sandbox cannot execute them end-to-end.
 
+Manual matrices are now tracked in dedicated checklist docs (not duplicated in this narrative report):
+
+- `docs/manual-tests/dou-shou-qi-ui-smoke.md`
+- `docs/manual-tests/lobby-provider-failure-matrix.md`
+- `docs/manual-tests/responsive-hub-embed-matrix.md`
+- `docs/manual-tests/README.md`
+- `docs/review/ARTIFACTS.md`
+
 ## Implemented Changes
 
-### 1) Repo hygiene blocker fix (BI-1)
+### 1) Repo hygiene gate status (BI-1)
 
-- Removed tracked files at repo root:
-  - `Dou`
-  - `back`
-- Verification run:
-  - `git rm -f Dou back`
+- Objective verification command:
   - `git ls-files Dou back; test ! -e Dou && test ! -e back`
-  - Result: `rm 'Dou'`, `rm 'back'`, no tracked entries returned for `Dou/back`, and both paths are absent.
+- Current loop requirement:
+  - must print no tracked entries and both paths must be absent.
 
 ### 2) Audit artifact integrity correction (BI-2)
 
