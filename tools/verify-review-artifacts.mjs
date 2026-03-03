@@ -19,6 +19,7 @@ const requiredAuditRefs = [
 ];
 
 const manualSentinel = 'Manual:';
+const artifactVerifierCommand = 'node tools/verify-review-artifacts.mjs';
 
 async function exists(absolutePath) {
   try {
@@ -66,6 +67,9 @@ export async function runVerification({ repoRoot = process.cwd(), execGit = defa
     const artifactContractBody = await readFile(artifactContractPath, 'utf8');
     if (!artifactContractBody.includes(manualSentinel)) {
       failures.push('artifact contract missing Manual: sentinel reference');
+    }
+    if (!artifactContractBody.includes(artifactVerifierCommand)) {
+      failures.push('artifact contract missing verifier command reference');
     }
   }
 

@@ -22,7 +22,11 @@ async function seedArtifacts(repoRoot, { includeAuditRefs = true } = {}) {
       content = ['# manual tests', 'Manual: python3 -m http.server 8000'].join('\n');
     }
     if (relativePath.endsWith('docs/review/ARTIFACTS.md')) {
-      content = ['# artifacts', 'Manual: execute docs/manual-tests/*.md'].join('\n');
+      content = [
+        '# artifacts',
+        'node tools/verify-review-artifacts.mjs',
+        'Manual: execute docs/manual-tests/*.md'
+      ].join('\n');
     }
     await writeFile(absolutePath, content, 'utf8');
   }
@@ -103,6 +107,27 @@ test('runVerification fails when artifact contract is missing Manual: sentinel',
   assert.equal(result.ok, false);
   assert.equal(
     result.failures.includes('artifact contract missing Manual: sentinel reference'),
+    true
+  );
+});
+
+test('runVerification fails when artifact contract is missing verifier command', async () => {
+  const repoRoot = await mkdtemp(path.join(os.tmpdir(), 'artifact-verify-missing-command-'));
+  await seedArtifacts(repoRoot);
+  await writeFile(
+    path.join(repoRoot, 'docs/review/ARTIFACTS.md'),
+    '# artifacts\nManual: execute docs/manual-tests/*.md\n',
+    'utf8'
+  );
+
+  const result = await runVerification({
+    repoRoot,
+    execGit: () => ({ status: 0, stdout: '', stderr: '' })
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(
+    result.failures.includes('artifact contract missing verifier command reference'),
     true
   );
 });

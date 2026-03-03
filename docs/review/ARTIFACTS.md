@@ -24,6 +24,7 @@ npm --prefix dou-shou-qi run build
 npm --prefix alien-arena-phaser run lint
 npm --prefix alien-arena-phaser test
 npm --prefix alien-arena-phaser run build
+node tools/verify-review-artifacts.mjs
 git ls-files Dou back
 ```
 
