@@ -39,7 +39,15 @@ Pass criteria:
 If this environment cannot bind a local server or run a browser, run the checklists on a permissive machine using:
 
 ```bash
-python3 -m http.server 8000
+Manual: python3 -m http.server 8000
 ```
 
 Then open `http://localhost:8000/` and capture screenshots/logs using the evidence format above.
+
+## Manual command routing contract
+
+Manual-only workflow commands must start with the exact `Manual:` prefix.
+
+- `Manual:` items are checklist instructions and must be routed to the manual queue.
+- `Manual:` items must never be executed as shell commands by automated gates.
+- Automated shell commands must not include the `Manual:` prefix.

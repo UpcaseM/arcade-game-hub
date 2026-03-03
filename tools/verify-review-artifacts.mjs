@@ -18,6 +18,8 @@ const requiredAuditRefs = [
   'docs/manual-tests/responsive-hub-embed-matrix.md'
 ];
 
+const manualSentinel = 'Manual:';
+
 async function exists(absolutePath) {
   try {
     await access(absolutePath);
@@ -48,6 +50,22 @@ export async function runVerification({ repoRoot = process.cwd(), execGit = defa
       if (!auditBody.includes(requiredRef)) {
         failures.push(`audit missing checklist reference: ${requiredRef}`);
       }
+    }
+  }
+
+  const manualReadmePath = path.join(repoRoot, 'docs/manual-tests/README.md');
+  if (await exists(manualReadmePath)) {
+    const manualReadmeBody = await readFile(manualReadmePath, 'utf8');
+    if (!manualReadmeBody.includes(manualSentinel)) {
+      failures.push('manual checklist README missing Manual: sentinel contract');
+    }
+  }
+
+  const artifactContractPath = path.join(repoRoot, 'docs/review/ARTIFACTS.md');
+  if (await exists(artifactContractPath)) {
+    const artifactContractBody = await readFile(artifactContractPath, 'utf8');
+    if (!artifactContractBody.includes(manualSentinel)) {
+      failures.push('artifact contract missing Manual: sentinel reference');
     }
   }
 
@@ -85,4 +103,3 @@ async function main() {
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   await main();
 }
-

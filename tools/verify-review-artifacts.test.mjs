@@ -18,6 +18,12 @@ async function seedArtifacts(repoRoot, { includeAuditRefs = true } = {}) {
         'docs/manual-tests/responsive-hub-embed-matrix.md'
       ].join('\n');
     }
+    if (relativePath.endsWith('docs/manual-tests/README.md')) {
+      content = ['# manual tests', 'Manual: python3 -m http.server 8000'].join('\n');
+    }
+    if (relativePath.endsWith('docs/review/ARTIFACTS.md')) {
+      content = ['# artifacts', 'Manual: execute docs/manual-tests/*.md'].join('\n');
+    }
     await writeFile(absolutePath, content, 'utf8');
   }
 }
@@ -67,3 +73,36 @@ test('runVerification fails when Dou/back are tracked', async () => {
   );
 });
 
+test('runVerification fails when manual README is missing Manual: sentinel', async () => {
+  const repoRoot = await mkdtemp(path.join(os.tmpdir(), 'artifact-verify-manual-readme-'));
+  await seedArtifacts(repoRoot);
+  await writeFile(path.join(repoRoot, 'docs/manual-tests/README.md'), '# manual tests\n', 'utf8');
+
+  const result = await runVerification({
+    repoRoot,
+    execGit: () => ({ status: 0, stdout: '', stderr: '' })
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(
+    result.failures.includes('manual checklist README missing Manual: sentinel contract'),
+    true
+  );
+});
+
+test('runVerification fails when artifact contract is missing Manual: sentinel', async () => {
+  const repoRoot = await mkdtemp(path.join(os.tmpdir(), 'artifact-verify-artifact-contract-'));
+  await seedArtifacts(repoRoot);
+  await writeFile(path.join(repoRoot, 'docs/review/ARTIFACTS.md'), '# artifacts\n', 'utf8');
+
+  const result = await runVerification({
+    repoRoot,
+    execGit: () => ({ status: 0, stdout: '', stderr: '' })
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(
+    result.failures.includes('artifact contract missing Manual: sentinel reference'),
+    true
+  );
+});

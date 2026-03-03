@@ -27,3 +27,10 @@ npm --prefix alien-arena-phaser run build
 git ls-files Dou back
 ```
 
+## Canonical manual gate entries
+
+Manual checklist commands must use an explicit `Manual:` sentinel so workflow runners classify them as manual and skip shell execution.
+
+```bash
+Manual: python3 -m http.server 8000; execute docs/manual-tests/*.md and capture evidence under docs/evidence/<checklist-id>/YYYYMMDD-*.png
+```
