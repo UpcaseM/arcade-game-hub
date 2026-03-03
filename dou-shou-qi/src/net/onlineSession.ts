@@ -19,6 +19,8 @@ type SessionListener = {
 };
 
 const HEARTBEAT_MS = 5000;
+const JOIN_RECOVERY_READ_RETRIES = 3;
+const JOIN_RECOVERY_RETRY_DELAY_MS = 120;
 type TransportMode = 'webrtc' | 'relay';
 type RelayEnvelope = { seq: number; at: number; from: OnlineRole; message: NetMessage };
 
@@ -194,7 +196,7 @@ class OnlineSession {
 
     let joined: LobbyRoom;
     if (relayJoin) {
-      const existing = await this.lobbyStore.getRoom(room.id);
+      const existing = await this.loadRoomForJoinRecovery(room.id);
       if (!existing || existing.status === 'closed' || (existing.guestName && existing.guestName !== localName)) {
         throw new Error('Room is no longer available.');
       }
@@ -214,7 +216,7 @@ class OnlineSession {
           answerCode: answerCode ?? ''
         });
       } catch (error) {
-        const existing = await this.lobbyStore.getRoom(room.id);
+        const existing = await this.loadRoomForJoinRecovery(room.id);
         if (!existing || existing.status === 'closed' || (existing.guestName && existing.guestName !== localName)) {
           throw error;
         }
@@ -240,6 +242,21 @@ class OnlineSession {
       this.send({ type: 'hello', payload: { name: this.localName, role: 'guest' } });
     }
     return joined;
+  }
+
+  private async loadRoomForJoinRecovery(roomId: string): Promise<LobbyRoom | null> {
+    for (let attempt = 0; attempt < JOIN_RECOVERY_READ_RETRIES; attempt += 1) {
+      const room = await this.lobbyStore.getRoom(roomId);
+      if (room) {
+        return room;
+      }
+      if (attempt < JOIN_RECOVERY_READ_RETRIES - 1) {
+        await new Promise<void>((resolve) => {
+          globalThis.setTimeout(resolve, JOIN_RECOVERY_RETRY_DELAY_MS);
+        });
+      }
+    }
+    return null;
   }
 
   async startMatch(): Promise<number> {

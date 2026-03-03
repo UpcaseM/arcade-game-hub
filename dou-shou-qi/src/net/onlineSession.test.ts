@@ -174,6 +174,33 @@ describe('onlineSession lobby lifecycle', () => {
     expect(onlineSession.getRole()).toBe('guest');
   });
 
+  it('recovers guest join when recovery read is briefly empty before room appears', async () => {
+    const { onlineSession } = await import('./onlineSession');
+
+    store.getRoom
+      .mockResolvedValueOnce({ ...mockRoom })
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({
+        ...mockRoom,
+        guestName: 'Bob',
+        answerCode: 'answer-existing',
+        status: 'connected'
+      });
+    store.joinRoom.mockRejectedValueOnce(new Error('Room is no longer available.'));
+
+    await onlineSession.joinRoom('Bob', 'room-1');
+
+    expect(store.updateRoom).toHaveBeenCalledWith(
+      'room-1',
+      expect.objectContaining({
+        guestName: 'Bob',
+        answerCode: 'answer-guest',
+        status: 'connected'
+      })
+    );
+    expect(onlineSession.getRole()).toBe('guest');
+  });
+
   it('host reconnect bumps room version', async () => {
     const { onlineSession } = await import('./onlineSession');
     await onlineSession.hostRoom('Alice');
