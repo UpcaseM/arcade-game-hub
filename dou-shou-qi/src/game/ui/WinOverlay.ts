@@ -16,32 +16,45 @@ export class WinOverlay {
     onReplay: () => void;
     onMenu: () => void;
   }): void {
-    const dimmer = this.scene.add.rectangle(500, 325, 1000, 650, 0x020617, 0.7);
+    const sceneWidth = this.scene.scale.width;
+    const sceneHeight = this.scene.scale.height;
+    const isMobile = sceneWidth <= 860 || sceneHeight > sceneWidth;
+
+    const centerX = sceneWidth / 2;
+    const centerY = sceneHeight / 2;
+    const panelWidth = Math.min(500, sceneWidth - 32);
+    const panelHeight = isMobile ? 250 : 260;
+
+    const dimmer = this.scene.add.rectangle(centerX, centerY, sceneWidth, sceneHeight, 0x020617, 0.74);
     dimmer.setDepth(30);
 
-    const panel = this.scene.add.rectangle(500, 330, 500, 260, 0x0f172a, 0.96);
+    const panel = this.scene.add.rectangle(centerX, centerY + 8, panelWidth, panelHeight, 0x0f172a, 0.96);
     panel.setStrokeStyle(3, options.winnerIdentity?.primaryColor ?? 0x38bdf8, 1);
     panel.setDepth(31);
 
-    const title = this.scene.add.text(500, 260, options.winnerText, {
+    const title = this.scene.add.text(centerX, centerY - 58, options.winnerText, {
       fontFamily: 'Arial',
-      fontSize: '44px',
-      color: options.winnerIdentity?.textColor ?? '#e2e8f0'
+      fontSize: isMobile ? '36px' : '44px',
+      color: options.winnerIdentity?.textColor ?? '#e2e8f0',
+      wordWrap: { width: panelWidth - 30 },
+      align: 'center'
     });
     title.setOrigin(0.5);
     title.setDepth(32);
 
-    const summary = this.scene.add.text(500, 306, options.summary, {
+    const summary = this.scene.add.text(centerX, centerY - 10, options.summary, {
       fontFamily: 'Arial',
-      fontSize: '19px',
-      color: '#cbd5e1'
+      fontSize: isMobile ? '16px' : '19px',
+      color: '#cbd5e1',
+      wordWrap: { width: panelWidth - 36 },
+      align: 'center'
     });
     summary.setOrigin(0.5);
     summary.setDepth(32);
 
-    const replay = this.scene.add.text(500, 360, 'Play Again', {
+    const replay = this.scene.add.text(centerX, centerY + 42, 'Play Again', {
       fontFamily: 'Arial',
-      fontSize: '30px',
+      fontSize: isMobile ? '26px' : '30px',
       color: '#f8fafc',
       backgroundColor: '#2563eb',
       padding: { x: 14, y: 8 }
@@ -51,9 +64,9 @@ export class WinOverlay {
     replay.setInteractive({ useHandCursor: true });
     replay.on('pointerdown', options.onReplay);
 
-    const menu = this.scene.add.text(500, 414, 'Back to Menu', {
+    const menu = this.scene.add.text(centerX, centerY + (isMobile ? 94 : 98), 'Back to Menu', {
       fontFamily: 'Arial',
-      fontSize: '24px',
+      fontSize: isMobile ? '22px' : '24px',
       color: '#111827',
       backgroundColor: '#e2e8f0',
       padding: { x: 12, y: 7 }

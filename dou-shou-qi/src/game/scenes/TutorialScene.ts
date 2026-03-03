@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { bindLegacyViewport } from '../ui/legacySceneViewport';
 
 export class DouShouQiTutorialScene extends Phaser.Scene {
   constructor() {
@@ -6,6 +7,8 @@ export class DouShouQiTutorialScene extends Phaser.Scene {
   }
 
   create(): void {
+    bindLegacyViewport(this);
+
     this.add.text(230, 44, 'Dou Shou Qi - Flip Mode Rules', {
       fontSize: '38px',
       color: '#e2e8f0',

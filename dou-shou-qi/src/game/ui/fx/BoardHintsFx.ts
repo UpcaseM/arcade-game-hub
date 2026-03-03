@@ -5,13 +5,15 @@ export function flashCells(
   cells: Array<{ col: number; row: number }>,
   cellToPoint: (col: number, row: number) => { x: number; y: number },
   color: number,
-  reducedMotion: boolean
+  reducedMotion: boolean,
+  cellSize = 84
 ): void {
   const hold = reducedMotion ? 140 : 260;
+  const markerSize = Math.max(32, Math.round(cellSize * 0.76));
 
   cells.forEach((cell) => {
     const point = cellToPoint(cell.col, cell.row);
-    const marker = scene.add.rectangle(point.x, point.y, 84, 84, color, 0.14);
+    const marker = scene.add.rectangle(point.x, point.y, markerSize, markerSize, color, 0.14);
     marker.setStrokeStyle(2, color, 0.9);
     marker.setDepth(3);
 

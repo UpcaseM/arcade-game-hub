@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { LobbyRoom } from '../../net/lobbyStore';
 import { onlineSession } from '../../net/onlineSession';
+import { bindLegacyViewport } from '../ui/legacySceneViewport';
 
 type LobbyRole = 'host' | 'guest';
 
@@ -23,6 +24,8 @@ export class DouShouQiLobbyScene extends Phaser.Scene {
   }
 
   create(): void {
+    bindLegacyViewport(this);
+
     this.add.rectangle(500, 325, 1000, 650, 0x112110, 1);
     this.add.rectangle(500, 325, 940, 560, 0x1d2d1a, 0.95).setStrokeStyle(2, 0x4c7a48, 1);
 

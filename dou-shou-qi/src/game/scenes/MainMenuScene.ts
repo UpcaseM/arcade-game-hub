@@ -7,6 +7,7 @@ import {
 } from '../../net/lobbyStore';
 import { onlineSession } from '../../net/onlineSession';
 import { loadUiSettings, saveUiSettings } from '../ui/settings';
+import { bindLegacyViewport } from '../ui/legacySceneViewport';
 
 const ACTIVE_USER_KEY = 'arcade_active_user_v1';
 
@@ -66,6 +67,8 @@ export class DouShouQiMainMenuScene extends Phaser.Scene {
   }
 
   create(): void {
+    bindLegacyViewport(this);
+
     const settings = loadUiSettings();
     this.defaultName = readHubIdentity();
 

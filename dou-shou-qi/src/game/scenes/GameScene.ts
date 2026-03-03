@@ -1,10 +1,7 @@
 import Phaser from 'phaser';
 import {
   BOARD_COLS,
-  BOARD_OFFSET_X,
-  BOARD_OFFSET_Y,
   BOARD_ROWS,
-  CELL_SIZE,
   createInitialGameState,
   flipAnimal,
   getAnimalAtCell,
@@ -19,6 +16,7 @@ import { AudioEngine } from '../audio/AudioEngine';
 import { HudView } from '../ui/HudView';
 import { PieceView } from '../ui/PieceView';
 import { WinOverlay } from '../ui/WinOverlay';
+import { computeGameLayout, GameLayout } from '../ui/gameLayout';
 import { flashCells } from '../ui/fx/BoardHintsFx';
 import { playCaptureImpact } from '../ui/fx/CaptureFx';
 import { playFlipReveal } from '../ui/fx/FlipFx';
@@ -44,6 +42,7 @@ export class DouShouQiGameScene extends Phaser.Scene {
   private boardGraphics!: Phaser.GameObjects.Graphics;
   private boardCue!: Phaser.GameObjects.Rectangle;
   private networkText!: Phaser.GameObjects.Text;
+  private layout!: GameLayout;
 
   private readonly pieceViews = new Map<string, PieceView>();
   private moveHintRects: Phaser.GameObjects.Rectangle[] = [];
@@ -65,6 +64,9 @@ export class DouShouQiGameScene extends Phaser.Scene {
   private settingsSfxMuteText!: Phaser.GameObjects.Text;
   private settingsMusicVolumeText!: Phaser.GameObjects.Text;
   private settingsSfxVolumeText!: Phaser.GameObjects.Text;
+  private settingsButton!: Phaser.GameObjects.Text;
+  private backButton!: Phaser.GameObjects.Text;
+  private reconnectButton?: Phaser.GameObjects.Text;
   private matchStarted = true;
 
   constructor() {
@@ -91,78 +93,94 @@ export class DouShouQiGameScene extends Phaser.Scene {
   }
 
   create(): void {
+    this.cameras.main.setViewport(0, 0, this.scale.width, this.scale.height);
+    this.cameras.main.setZoom(1);
+
     this.createBoard();
     this.createUI();
+    this.applyResponsiveLayout();
     this.syncPieceViewsToState();
     this.renderHud();
     this.setupInput();
     this.bindOnlineSession();
+
+    this.scale.on('resize', this.handleResize, this);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.scale.off('resize', this.handleResize, this);
+      if (this.selectionPulse) {
+        this.selectionPulse.stop();
+        this.selectionPulse = undefined;
+      }
+    });
   }
 
   private createBoard(): void {
     this.boardGraphics = this.add.graphics();
     this.cameras.main.setBackgroundColor(0x111827);
 
-    const sceneWidth = this.scale.width;
-    const sceneHeight = this.scale.height;
+    this.boardCue = this.add.rectangle(0, 0, 0, 0);
+    this.boardCue.setStrokeStyle(3, 0xfacc15, 0);
+    this.boardCue.setDepth(1);
+  }
+
+  private drawBoard(): void {
+    this.boardGraphics.clear();
+
+    const { sceneWidth, sceneHeight, boardX, boardY, boardWidth, boardHeight, cellSize } = this.layout;
+
     this.boardGraphics.fillGradientStyle(0x102214, 0x1f3520, 0x2c2a18, 0x17261b, 1);
     this.boardGraphics.fillRect(0, 0, sceneWidth, sceneHeight);
 
     this.boardGraphics.fillStyle(0x1f3a25, 0.2);
-    for (let i = 0; i < 20; i += 1) {
-      const rx = 20 + i * 48;
-      const ry = (i % 2 === 0 ? 24 : 56) + (i * 17) % 510;
+    const bloomCount = Math.max(20, Math.floor(sceneWidth / 34));
+    for (let i = 0; i < bloomCount; i += 1) {
+      const rx = (i * 79) % sceneWidth;
+      const ry = (i * 131) % sceneHeight;
       this.boardGraphics.fillCircle(rx, ry, i % 3 === 0 ? 14 : 9);
     }
 
-    const width = BOARD_COLS * CELL_SIZE;
-    const height = BOARD_ROWS * CELL_SIZE;
-
     this.boardGraphics.fillGradientStyle(0x1c2f1a, 0x253b1f, 0x3a2b1a, 0x1b2d18, 1);
-    this.boardGraphics.fillRect(BOARD_OFFSET_X - 14, BOARD_OFFSET_Y - 14, width + 28, height + 28);
+    this.boardGraphics.fillRect(boardX - 14, boardY - 14, boardWidth + 28, boardHeight + 28);
 
     for (let row = 0; row < BOARD_ROWS; row += 1) {
       for (let col = 0; col < BOARD_COLS; col += 1) {
         const shade = (row + col) % 2 === 0 ? 0x3a4f2c : 0x2f4325;
         this.boardGraphics.fillStyle(shade, 1);
-        this.boardGraphics.fillRect(BOARD_OFFSET_X + col * CELL_SIZE, BOARD_OFFSET_Y + row * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+        this.boardGraphics.fillRect(boardX + col * cellSize, boardY + row * cellSize, cellSize, cellSize);
       }
     }
 
     this.boardGraphics.lineStyle(5, NEUTRAL_COLORS.boardOuter, 1);
-    this.boardGraphics.strokeRect(BOARD_OFFSET_X, BOARD_OFFSET_Y, width, height);
+    this.boardGraphics.strokeRect(boardX, boardY, boardWidth, boardHeight);
 
     this.boardGraphics.lineStyle(2, NEUTRAL_COLORS.boardLine, 1);
     for (let r = 1; r < BOARD_ROWS; r += 1) {
-      const y = BOARD_OFFSET_Y + r * CELL_SIZE;
-      this.boardGraphics.lineBetween(BOARD_OFFSET_X, y, BOARD_OFFSET_X + width, y);
+      const y = boardY + r * cellSize;
+      this.boardGraphics.lineBetween(boardX, y, boardX + boardWidth, y);
     }
     for (let c = 1; c < BOARD_COLS; c += 1) {
-      const x = BOARD_OFFSET_X + c * CELL_SIZE;
-      this.boardGraphics.lineBetween(x, BOARD_OFFSET_Y, x, BOARD_OFFSET_Y + height);
+      const x = boardX + c * cellSize;
+      this.boardGraphics.lineBetween(x, boardY, x, boardY + boardHeight);
     }
 
-    this.boardCue = this.add.rectangle(
-      BOARD_OFFSET_X + width / 2,
-      BOARD_OFFSET_Y + height / 2,
-      width + 8,
-      height + 8
-    );
-    this.boardCue.setStrokeStyle(3, 0xfacc15, 0);
-    this.boardCue.setDepth(1);
+    this.boardCue.setPosition(boardX + boardWidth / 2, boardY + boardHeight / 2);
+    this.boardCue.setDisplaySize(boardWidth + 8, boardHeight + 8);
   }
 
   private createUI(): void {
     this.hudView = new HudView(this);
     this.winOverlay = new WinOverlay(this);
 
-    const backButton = this.add.text(24, 620, '< Back to Menu', {
+    this.backButton = this.add.text(24, 620, '< Back to Menu', {
       fontFamily: 'Arial',
       fontSize: '20px',
-      color: '#3b82f6'
+      color: '#dbeafe',
+      backgroundColor: '#0f172a',
+      padding: { x: 10, y: 6 }
     });
-    backButton.setInteractive({ useHandCursor: true });
-    backButton.on('pointerdown', () => {
+    this.backButton.setDepth(31);
+    this.backButton.setInteractive({ useHandCursor: true });
+    this.backButton.on('pointerdown', () => {
       onlineSession.setListener({});
       this.scene.start('DouShouQiMainMenuScene');
     });
@@ -172,35 +190,107 @@ export class DouShouQiGameScene extends Phaser.Scene {
       fontSize: '14px',
       color: '#94a3b8'
     });
+    this.networkText.setOrigin(0, 1);
+    this.networkText.setDepth(31);
 
     if (this.mode === 'online') {
-      const reconnectButton = this.add.text(210, 620, 'Reconnect', {
+      this.reconnectButton = this.add.text(210, 620, 'Reconnect', {
         fontFamily: 'Arial',
         fontSize: '20px',
-        color: '#22d3ee'
+        color: '#22d3ee',
+        backgroundColor: '#083344',
+        padding: { x: 10, y: 6 }
       });
-      reconnectButton.setInteractive({ useHandCursor: true });
-      reconnectButton.on('pointerdown', () => {
+      this.reconnectButton.setDepth(31);
+      this.reconnectButton.setInteractive({ useHandCursor: true });
+      this.reconnectButton.on('pointerdown', () => {
         void this.handleReconnect();
       });
     }
 
-    const settingsButton = this.add.text(976, 82, 'Settings', {
+    this.settingsButton = this.add.text(976, 82, 'Settings', {
       fontFamily: 'Arial',
       fontSize: '18px',
       color: '#f8fafc',
       backgroundColor: '#0f172a',
       padding: { x: 10, y: 6 }
     });
-    settingsButton.setOrigin(1, 0);
-    settingsButton.setDepth(31);
-    settingsButton.setInteractive({ useHandCursor: true });
-    settingsButton.on('pointerdown', () => {
+    this.settingsButton.setOrigin(1, 0);
+    this.settingsButton.setDepth(31);
+    this.settingsButton.setInteractive({ useHandCursor: true });
+    this.settingsButton.on('pointerdown', () => {
       this.audio.unlock();
       this.toggleSettingsPanel();
     });
 
     this.createSettingsPanel();
+  }
+
+  private applyResponsiveLayout(): void {
+    this.layout = computeGameLayout(this.scale.width, this.scale.height);
+    this.drawBoard();
+
+    this.hudView.setLayout({
+      sceneWidth: this.layout.sceneWidth,
+      sceneHeight: this.layout.sceneHeight,
+      isMobile: this.layout.isMobile,
+      sidePadding: this.layout.sidePadding,
+      boardTop: this.layout.boardY,
+      boardBottom: this.layout.boardY + this.layout.boardHeight
+    });
+
+    this.layoutControls();
+    this.layoutSettingsPanel();
+    this.updateNetworkText();
+  }
+
+  private layoutControls(): void {
+    const side = this.layout.sidePadding;
+    const controlsY = this.layout.sceneHeight - (this.layout.isMobile ? 74 : 44);
+
+    this.backButton.setPosition(side, controlsY);
+    this.backButton.setFontSize(this.layout.isMobile ? 16 : 20);
+
+    if (this.reconnectButton) {
+      this.reconnectButton.setPosition(side + this.backButton.width + 12, controlsY);
+      this.reconnectButton.setFontSize(this.layout.isMobile ? 16 : 20);
+    }
+
+    this.settingsButton.setPosition(
+      this.layout.sceneWidth - side,
+      this.layout.isMobile ? Math.max(8, Math.round(side * 0.8)) : 82
+    );
+    this.settingsButton.setFontSize(this.layout.isMobile ? 15 : 18);
+
+    this.networkText.setFontSize(this.layout.isMobile ? 11 : 14);
+    this.networkText.setWordWrapWidth(Math.max(200, this.layout.sceneWidth - side * 2));
+    this.networkText.setPosition(side, this.layout.sceneHeight - 14);
+  }
+
+  private layoutSettingsPanel(): void {
+    const baseWidth = 430;
+    const baseHeight = 250;
+    const maxWidth = this.layout.sceneWidth - this.layout.sidePadding * 2;
+    const scale = Phaser.Math.Clamp(maxWidth / baseWidth, 0.72, 1);
+    const panelWidth = baseWidth * scale;
+    const panelHeight = baseHeight * scale;
+
+    const x = this.layout.isMobile
+      ? (this.layout.sceneWidth - panelWidth) / 2
+      : this.layout.sceneWidth - panelWidth - this.layout.sidePadding;
+    const y = this.layout.isMobile
+      ? Math.max(16, this.layout.boardY + (this.layout.boardHeight - panelHeight) / 2)
+      : this.layout.topArea + 18;
+
+    this.settingsPanel.setScale(scale);
+    this.settingsPanel.setPosition(Math.round(x), Math.round(y));
+  }
+
+  private handleResize(): void {
+    this.cameras.main.setViewport(0, 0, this.scale.width, this.scale.height);
+    this.applyResponsiveLayout();
+    this.syncPieceViewsToState();
+    this.renderHud();
   }
 
   private setupInput(): void {
@@ -211,8 +301,8 @@ export class DouShouQiGameScene extends Phaser.Scene {
         return;
       }
 
-      const col = Math.floor((pointer.x - BOARD_OFFSET_X) / CELL_SIZE);
-      const row = Math.floor((pointer.y - BOARD_OFFSET_Y) / CELL_SIZE);
+      const col = Math.floor((pointer.x - this.layout.boardX) / this.layout.cellSize);
+      const row = Math.floor((pointer.y - this.layout.boardY) / this.layout.cellSize);
       if (col < 0 || col >= BOARD_COLS || row < 0 || row >= BOARD_ROWS) {
         return;
       }
@@ -280,8 +370,7 @@ export class DouShouQiGameScene extends Phaser.Scene {
         if (message.type === 'hello') {
           this.updateNetworkText();
         }
-      }
-      ,
+      },
       onMatchStart: () => {
         this.matchStarted = true;
         this.awaitingSnapshot = onlineSession.getRole() === 'guest';
@@ -309,6 +398,12 @@ export class DouShouQiGameScene extends Phaser.Scene {
     const remote = onlineSession.getRemoteName();
     const host = hostName ?? (onlineSession.getRole() === 'host' ? local : remote);
     const guest = guestName ?? (onlineSession.getRole() === 'guest' ? local : remote);
+
+    if (this.layout?.isMobile) {
+      this.networkText.setText(`Online ${status} | ${local} vs ${remote} | H:${host} G:${guest}`);
+      return;
+    }
+
     this.networkText.setText(`Online ${status} | You: ${local} | Opponent: ${remote} | Host ${host} / Guest ${guest}`);
   }
 
@@ -514,10 +609,10 @@ export class DouShouQiGameScene extends Phaser.Scene {
       const selected = selectedId === pieceId;
       view.setSelected(selected);
       if (!selected) {
-        view.setScale(1);
+        view.setScale(this.layout.pieceScale);
         return;
       }
-      this.selectionPulse = startSelectionPulse(this, view.container, this.settings.reducedMotion);
+      this.selectionPulse = startSelectionPulse(this, view.container, this.settings.reducedMotion, this.layout.pieceScale);
     });
   }
 
@@ -530,12 +625,13 @@ export class DouShouQiGameScene extends Phaser.Scene {
 
   private renderMoveHints(): void {
     this.clearMoveHints();
+    const hintSize = Math.max(24, this.layout.cellSize - this.layout.hintInset * 2);
     (this.gameState.validMoves ?? []).forEach(({ col, row }) => {
       const { x, y } = this.cellCenter(col, row);
-      const cell = this.add.rectangle(x, y, CELL_SIZE - 14, CELL_SIZE - 14, 0x22c55e, 0.14);
+      const cell = this.add.rectangle(x, y, hintSize, hintSize, 0x22c55e, 0.14);
       cell.setStrokeStyle(2, 0x4ade80, 0.92);
       cell.setDepth(2);
-      const dot = this.add.circle(x, y, 6, 0x86efac, 0.95);
+      const dot = this.add.circle(x, y, this.layout.hintDotRadius, 0x86efac, 0.95);
       dot.setDepth(3);
       this.moveHintRects.push(cell);
       this.moveHintDots.push(dot);
@@ -564,7 +660,7 @@ export class DouShouQiGameScene extends Phaser.Scene {
       view.updateFromAnimal(animal, identity, this.settings.colorAssist);
       view.setPosition(center.x, center.y);
       view.setAlpha(1);
-      view.setScale(1);
+      view.setScale(this.layout.pieceScale);
       view.setVisible(true);
     });
 
@@ -574,7 +670,7 @@ export class DouShouQiGameScene extends Phaser.Scene {
 
   private renderHud(): void {
     this.hudView.update(this.gameState, {
-      compact: true,
+      compact: this.layout?.isMobile ?? true,
       mode: this.mode,
       localTurn: this.localTurn,
       localName: this.mode === 'online' ? onlineSession.getLocalName() : 'Local',
@@ -585,7 +681,7 @@ export class DouShouQiGameScene extends Phaser.Scene {
 
   private pulseBoardCue(): void {
     this.boardCue.setAlpha(0.85);
-    this.boardCue.setStrokeStyle(3, 0xfacc15, 0.9);
+    this.boardCue.setStrokeStyle(this.layout.isMobile ? 2 : 3, 0xfacc15, 0.9);
     this.tweens.add({
       targets: this.boardCue,
       alpha: 0,
@@ -604,7 +700,7 @@ export class DouShouQiGameScene extends Phaser.Scene {
       identity?.textColor ?? '#e2e8f0',
       this.settings.reducedMotion
     );
-    flashCells(this, [{ col: 0, row: 0 }], this.cellCenter, identity?.primaryColor ?? 0x38bdf8, this.settings.reducedMotion);
+    flashCells(this, [{ col: 0, row: 0 }], this.cellCenter, identity?.primaryColor ?? 0x38bdf8, this.settings.reducedMotion, this.layout.cellSize);
   }
 
   private showResult(): void {
@@ -627,17 +723,15 @@ export class DouShouQiGameScene extends Phaser.Scene {
 
   private cellCenter(col: number, row: number): { x: number; y: number } {
     return {
-      x: BOARD_OFFSET_X + col * CELL_SIZE + CELL_SIZE / 2,
-      y: BOARD_OFFSET_Y + row * CELL_SIZE + CELL_SIZE / 2
+      x: this.layout.boardX + col * this.layout.cellSize + this.layout.cellSize / 2,
+      y: this.layout.boardY + row * this.layout.cellSize + this.layout.cellSize / 2
     };
   }
 
   private createSettingsPanel(): void {
-    const x = this.scale.width - 430 - 24;
-    const y = 92;
     const width = 430;
     const height = 250;
-    const panel = this.add.container(x, y);
+    const panel = this.add.container(0, 0);
     panel.setDepth(40);
     panel.setVisible(false);
 
