@@ -214,18 +214,12 @@ class OnlineSession {
           answerCode: answerCode ?? ''
         });
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        if (!message.includes('Room is no longer available')) {
-          throw error;
-        }
-
-        // If the same guest triggered duplicate join attempts, re-claim this room
-        // with the latest answer payload instead of hard-failing.
         const existing = await this.lobbyStore.getRoom(room.id);
         if (!existing || existing.status === 'closed' || (existing.guestName && existing.guestName !== localName)) {
           throw error;
         }
 
+        // Recover from duplicate/late join races even when provider errors use non-standard wording.
         joined = await this.lobbyStore.updateRoom(room.id, {
           guestName: localName,
           answerCode: answerCode ?? existing.answerCode,
