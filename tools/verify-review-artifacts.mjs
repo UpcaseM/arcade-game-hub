@@ -20,6 +20,9 @@ const requiredAuditRefs = [
 
 const manualSentinel = 'Manual:';
 const artifactVerifierCommand = 'node tools/verify-review-artifacts.mjs';
+const implementationReportPathRef = 'implementation_report.loop-1.json';
+const runStatePathRef = 'run_state.json';
+const terminalStatuses = new Set(['DELIVERED', 'USER_BLOCKED', 'FAILED']);
 
 async function exists(absolutePath) {
   try {
@@ -34,7 +37,22 @@ function defaultExecGit(args, cwd) {
   return spawnSync('git', args, { cwd, encoding: 'utf8' });
 }
 
-export async function runVerification({ repoRoot = process.cwd(), execGit = defaultExecGit } = {}) {
+function resolveRuntimePath(repoRoot, runtimePath) {
+  if (!runtimePath) {
+    return null;
+  }
+  if (path.isAbsolute(runtimePath)) {
+    return runtimePath;
+  }
+  return path.join(repoRoot, runtimePath);
+}
+
+export async function runVerification({
+  repoRoot = process.cwd(),
+  execGit = defaultExecGit,
+  implementationReportPath = process.env.WORKFLOW_IMPLEMENTATION_REPORT_PATH ?? null,
+  runStatePath = process.env.WORKFLOW_RUN_STATE_PATH ?? null
+} = {}) {
   const failures = [];
 
   for (const relativePath of requiredArtifacts) {
@@ -70,6 +88,35 @@ export async function runVerification({ repoRoot = process.cwd(), execGit = defa
     }
     if (!artifactContractBody.includes(artifactVerifierCommand)) {
       failures.push('artifact contract missing verifier command reference');
+    }
+    if (!artifactContractBody.includes(implementationReportPathRef)) {
+      failures.push('artifact contract missing implementation report path reference');
+    }
+    if (!artifactContractBody.includes(runStatePathRef)) {
+      failures.push('artifact contract missing run_state path reference');
+    }
+  }
+
+  const resolvedImplementationReportPath = resolveRuntimePath(repoRoot, implementationReportPath);
+  if (resolvedImplementationReportPath && !(await exists(resolvedImplementationReportPath))) {
+    failures.push(`implementation report path not found: ${implementationReportPath}`);
+  }
+
+  const resolvedRunStatePath = resolveRuntimePath(repoRoot, runStatePath);
+  if (resolvedRunStatePath) {
+    if (!(await exists(resolvedRunStatePath))) {
+      failures.push(`run_state path not found: ${runStatePath}`);
+    } else {
+      try {
+        const runState = JSON.parse(await readFile(resolvedRunStatePath, 'utf8'));
+        if (!terminalStatuses.has(runState.status)) {
+          failures.push(
+            `run_state not terminal: ${runState.status ?? '<missing>'} (expected DELIVERED/USER_BLOCKED/FAILED)`
+          );
+        }
+      } catch {
+        failures.push(`run_state is not valid JSON: ${runStatePath}`);
+      }
     }
   }
 

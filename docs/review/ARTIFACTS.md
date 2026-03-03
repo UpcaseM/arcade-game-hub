@@ -28,6 +28,20 @@ node tools/verify-review-artifacts.mjs
 git ls-files Dou back
 ```
 
+## Workflow terminal-state artifacts
+
+- `state/runs/<run_id>/implementation_report.loop-1.json`
+- `state/runs/<run_id>/run_state.json`
+- Terminal `run_state.status` must be one of: `DELIVERED`, `USER_BLOCKED`, `FAILED`.
+
+When those runtime paths are available, pass them to the verifier:
+
+```bash
+WORKFLOW_IMPLEMENTATION_REPORT_PATH=state/runs/<run_id>/implementation_report.loop-1.json \
+WORKFLOW_RUN_STATE_PATH=state/runs/<run_id>/run_state.json \
+node tools/verify-review-artifacts.mjs
+```
+
 ## Canonical manual gate entries
 
 Manual checklist commands must use an explicit `Manual:` sentinel so workflow runners classify them as manual and skip shell execution.

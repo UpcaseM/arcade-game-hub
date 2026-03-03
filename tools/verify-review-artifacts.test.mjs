@@ -24,6 +24,8 @@ async function seedArtifacts(repoRoot, { includeAuditRefs = true } = {}) {
     if (relativePath.endsWith('docs/review/ARTIFACTS.md')) {
       content = [
         '# artifacts',
+        'state/runs/<run_id>/implementation_report.loop-1.json',
+        'state/runs/<run_id>/run_state.json',
         'node tools/verify-review-artifacts.mjs',
         'Manual: execute docs/manual-tests/*.md'
       ].join('\n');
@@ -128,6 +130,138 @@ test('runVerification fails when artifact contract is missing verifier command',
   assert.equal(result.ok, false);
   assert.equal(
     result.failures.includes('artifact contract missing verifier command reference'),
+    true
+  );
+});
+
+test('runVerification fails when artifact contract is missing implementation report path ref', async () => {
+  const repoRoot = await mkdtemp(path.join(os.tmpdir(), 'artifact-verify-missing-impl-path-ref-'));
+  await seedArtifacts(repoRoot);
+  await writeFile(
+    path.join(repoRoot, 'docs/review/ARTIFACTS.md'),
+    [
+      '# artifacts',
+      'state/runs/<run_id>/run_state.json',
+      'node tools/verify-review-artifacts.mjs',
+      'Manual: execute docs/manual-tests/*.md'
+    ].join('\n'),
+    'utf8'
+  );
+
+  const result = await runVerification({
+    repoRoot,
+    execGit: () => ({ status: 0, stdout: '', stderr: '' })
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(
+    result.failures.includes('artifact contract missing implementation report path reference'),
+    true
+  );
+});
+
+test('runVerification fails when artifact contract is missing run_state path ref', async () => {
+  const repoRoot = await mkdtemp(path.join(os.tmpdir(), 'artifact-verify-missing-run-state-ref-'));
+  await seedArtifacts(repoRoot);
+  await writeFile(
+    path.join(repoRoot, 'docs/review/ARTIFACTS.md'),
+    [
+      '# artifacts',
+      'state/runs/<run_id>/implementation_report.loop-1.json',
+      'node tools/verify-review-artifacts.mjs',
+      'Manual: execute docs/manual-tests/*.md'
+    ].join('\n'),
+    'utf8'
+  );
+
+  const result = await runVerification({
+    repoRoot,
+    execGit: () => ({ status: 0, stdout: '', stderr: '' })
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(
+    result.failures.includes('artifact contract missing run_state path reference'),
+    true
+  );
+});
+
+test('runVerification validates implementation report and terminal run_state paths when provided', async () => {
+  const repoRoot = await mkdtemp(path.join(os.tmpdir(), 'artifact-verify-runtime-paths-pass-'));
+  await seedArtifacts(repoRoot);
+  await writeFile(
+    path.join(repoRoot, 'implementation_report.loop-1.json'),
+    JSON.stringify({ automated_commands: [] }),
+    'utf8'
+  );
+  await writeFile(
+    path.join(repoRoot, 'run_state.json'),
+    JSON.stringify({ status: 'DELIVERED' }),
+    'utf8'
+  );
+
+  const result = await runVerification({
+    repoRoot,
+    implementationReportPath: 'implementation_report.loop-1.json',
+    runStatePath: 'run_state.json',
+    execGit: () => ({ status: 0, stdout: '', stderr: '' })
+  });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.failures, []);
+});
+
+test('runVerification fails when provided run_state is not terminal', async () => {
+  const repoRoot = await mkdtemp(path.join(os.tmpdir(), 'artifact-verify-runtime-paths-nonterminal-'));
+  await seedArtifacts(repoRoot);
+  await writeFile(
+    path.join(repoRoot, 'implementation_report.loop-1.json'),
+    JSON.stringify({ automated_commands: [] }),
+    'utf8'
+  );
+  await writeFile(
+    path.join(repoRoot, 'run_state.json'),
+    JSON.stringify({ status: 'IMPLEMENTING_LOOP_N' }),
+    'utf8'
+  );
+
+  const result = await runVerification({
+    repoRoot,
+    implementationReportPath: 'implementation_report.loop-1.json',
+    runStatePath: 'run_state.json',
+    execGit: () => ({ status: 0, stdout: '', stderr: '' })
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(
+    result.failures.includes(
+      'run_state not terminal: IMPLEMENTING_LOOP_N (expected DELIVERED/USER_BLOCKED/FAILED)'
+    ),
+    true
+  );
+});
+
+test('runVerification fails when provided implementation report path is missing', async () => {
+  const repoRoot = await mkdtemp(path.join(os.tmpdir(), 'artifact-verify-runtime-paths-missing-impl-'));
+  await seedArtifacts(repoRoot);
+  await writeFile(
+    path.join(repoRoot, 'run_state.json'),
+    JSON.stringify({ status: 'FAILED' }),
+    'utf8'
+  );
+
+  const result = await runVerification({
+    repoRoot,
+    implementationReportPath: 'missing-implementation-report.loop-1.json',
+    runStatePath: 'run_state.json',
+    execGit: () => ({ status: 0, stdout: '', stderr: '' })
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(
+    result.failures.includes(
+      'implementation report path not found: missing-implementation-report.loop-1.json'
+    ),
     true
   );
 });
