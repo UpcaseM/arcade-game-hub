@@ -135,6 +135,22 @@ describe('movement and capture', () => {
     expect(canCapture(elephant, mouse)).toBe(false);
   });
 
+  it('eliminates both pieces on same-rank capture', () => {
+    const state = createEmptyState();
+    const attacker = placeAnimal(state, 'b-dog', 'Dog', 4, 'blue', 1, 1);
+    const defender = placeAnimal(state, 'r-dog', 'Dog', 4, 'red', 1, 2);
+
+    expect(isValidMove(state, attacker, 1, 2)).toBe(true);
+
+    const result = moveAnimal(state, attacker.id, 1, 2);
+    expect(result.success).toBe(true);
+    expect(result.capturedAnimal?.id).toBe(defender.id);
+    expect(state.animals[attacker.id]).toBeUndefined();
+    expect(state.animals[defender.id]).toBeUndefined();
+    expect(state.lastAction).toContain('same rank');
+    expect(state.currentTurn).toBe('player2');
+  });
+
   it('returns valid orthogonal moves only', () => {
     const state = createEmptyState();
     const piece = placeAnimal(state, 'b-leopard', 'Leopard', 5, 'blue', 1, 1);

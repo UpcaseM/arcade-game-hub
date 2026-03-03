@@ -28,7 +28,7 @@ export class DouShouQiTutorialScene extends Phaser.Scene {
       '- Move exactly 1 step orthogonally (no diagonal moves).',
       '- You can only move your own revealed pieces.',
       '- Hidden pieces cannot be moved or captured until revealed.',
-      '- Capture rule: higher/equal rank captures lower/equal rank.',
+      '- Capture rule: higher rank captures lower rank; equal rank eliminates both pieces.',
       '- Special: Mouse can capture Elephant; Elephant cannot capture Mouse.',
       '',
       'Win:',

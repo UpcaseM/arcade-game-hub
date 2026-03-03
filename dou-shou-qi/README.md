@@ -12,7 +12,7 @@ This project intentionally uses **flip mode** (暗棋开局), not the standard 7
 - Side assignment: first revealed piece sets that player's color
 - Turn actions: flip one hidden piece, or move one of your revealed pieces
 - Move rule: one orthogonal step (no diagonal)
-- Capture rule: higher/equal rank captures lower/equal rank
+- Capture rule: higher rank captures lower rank; equal rank eliminates both pieces
 - Special rule: Mouse can capture Elephant, Elephant cannot capture Mouse
 - Hidden piece rule: hidden pieces cannot move or be captured until revealed
 - Win: capture all opponent-color pieces, or opponent has no legal action
